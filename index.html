@@ -236,87 +236,43 @@
   ]);
 
   function extractDeviceNos(line){
-    let s = String(line || "");
+    const s0 = String(line || "").trim();
+    if (!s0) return [];
 
-    // Remove times so we don't capture "06" and "44" as device numbers
-    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");      // 06:44
-    s = s.replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, " "); // 06:44:12
-    s = s.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g, " "); // 2026/02/26
+    // Only take the prefix BEFORE the first dot:
+    // "209,2145. Collision of 2 robots..." -> "209,2145"
+    const prefix = s0.split(".")[0].trim();
 
-    // Capture device tokens:
-    // - PPPO123...
-    // - CS256/1132 , CS105
-    // - H174 , H136/764 (we will use LEFT side rule later)
-    // - 1111/H111 or H111/1111
-    // - plain numbers 1866. 2159, etc
-    const re = /\b(?:PPPO\d+|CS\d+(?:\/\d+)?|H\d+(?:\/\d+)?|\d+(?:\/H\d+)?|H\d+(?:\/\d+)?|\d+)\b/gi;
+    // Now split by comma and clean
+    const parts = prefix.split(",").map(x => x.trim()).filter(Boolean);
 
-    const out = [];
-    let m;
-    while ((m = re.exec(s)) !== null) {
-      out.push(m[0]);
-    }
-
-    // Also split comma lists like "209,2145"
-    const expanded = [];
-    for (const t of out) {
-      for (const part of String(t).split(",")) {
-        const x = part.trim();
-        if (x) expanded.push(x);
+    // Keep only valid device tokens (robot/station/material patterns)
+    // Examples allowed: 209, 2145, H211/1111, 1111/H111, CS256/1132, PPPO123...
+    const valid = [];
+    for (const p of parts){
+      const U = p.toUpperCase();
+      if (
+        /^PPPO\d+/.test(U) ||
+        /^CS\d+(?:\/\d+)?$/.test(U) ||
+        /^H\d+(?:\/\d+)?$/.test(U) ||
+        /^\d+(?:\/H\d+)?$/.test(U) ||
+        /^\d+$/.test(U)
+      ){
+        valid.push(p);
       }
     }
 
-    // Deduplicate while keeping order
+    // Deduplicate
     const seen = new Set();
-    const uniq = [];
-    for (const t of expanded) {
-      const key = t.toUpperCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniq.push(t);
-      }
-    }
-    return uniq;
-  }
-
-  // ---------------------------
-  // Device token parsing (ONE COPY ONLY)
-  // ---------------------------
-  function extractDeviceNos(line){
-    let s = String(line || "");
-
-    // remove times so we don't capture them as numbers
-    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");
-    s = s.replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, " ");
-    s = s.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g, " ");
-
-    // capture tokens in the whole line (not only at the beginning)
-    const re = /\b(?:PPPO\w+|CS\d+(?:\/\d+)?|H\d+(?:\/\d+)?|\d+(?:\/H\d+)?|\d+)\b/gi;
-
     const out = [];
-    let m;
-    while ((m = re.exec(s)) !== null) out.push(m[0]);
-
-    // expand comma lists like "209,2145"
-    const expanded = [];
-    for (const t of out) {
-      for (const part of String(t).split(",")) {
-        const x = part.trim();
-        if (x) expanded.push(x);
-      }
-    }
-
-    // dedupe keeping order
-    const seen = new Set();
-    const uniq = [];
-    for (const t of expanded) {
+    for (const t of valid){
       const key = t.toUpperCase();
-      if (!seen.has(key)) {
+      if (!seen.has(key)){
         seen.add(key);
-        uniq.push(t);
+        out.push(t);
       }
     }
-    return uniq;
+    return out;
   }
 
   function inferStationFromH(Htoken){
