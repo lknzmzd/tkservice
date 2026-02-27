@@ -166,7 +166,6 @@
     LostBoxPos: "取放箱位置错误 Wrong pick and place box position",
     CannotLocated: "无法定义异常 Problem Cannot located",
     LiftingHeight: "举升高度误差Lifting height error",
-    AbnormalLifting: "举升机构异常 Abnormal lifting mechanism",
     MaterialSuperHigh: "物料超高 Material super high",
     SecurityModule: "安全模块故障Security module failure",
     ProgramBug: "程序逻辑BUG Program logic bug",
@@ -598,6 +597,66 @@
       issueDesc = "Safety communication failure";
       recovery = "Recovery";
       minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("obstacle on the path") && L.includes("dopped box")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.DropBox;
+      subType = SUB.ObstacleOnPath;
+      issueDesc = "Obstacle on the path dopped box";
+      recovery = "Moved out";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("obstacle on the path") && L.includes("dopped item")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.DropBox;
+      subType = SUB.ObstacleOnPath;
+      issueDesc = "Obstacle on the path dopped item";
+      recovery = "Moved out";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("lost box") && L.includes("unknown reason")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.DropBox;
+      subType = SUB.ObstacleOnPath;
+      issueDesc = "Lost box, unknown reason";
+      recovery = "Moved out";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("failed to take a case") && L.includes("unknown reason")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.CannotLocate;
+      issueDesc = "Failed to take a case, unknown reason";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("failed to place a case") && L.includes("unknown reason")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.CannotLocate;
+      issueDesc = "Failed to place a case, unknown reason";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("moving abnormal")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.UnableDrive;
+      subType = SUB.CannotLocate;
+      issueDesc = "Moving abnormal";
+      recovery = "Recovery";
+      minutes = 3;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
