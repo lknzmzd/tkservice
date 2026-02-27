@@ -348,20 +348,19 @@
     return { raw, U, left, num, prefix, hasSlash };
   }
 
-  // Device Type column
   function inferDeviceTypeFromNo(token, fallback){
     const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
     const t = normalizeDeviceToken(token);
     if (!t.raw) return fb;
 
-    // based on LEFT side rule:
+    // LEFT-side rule:
     // 1111/H111 -> robot
     // H111/1111 -> station
     if (t.prefix === "PPPO") return "Material box";
     if (t.prefix === "CS") return "Charging station";
-    if (t.prefix === "H") return inferStationFromH(t.left);
+    if (t.prefix === "H")  return inferStationFromH(t.left);
 
-    // robot number mapping
+    // robot set mapping
     if (!Number.isFinite(t.num)) return fb;
     if (K50H_SET.has(t.num)) return "K50H";
     if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
@@ -383,30 +382,7 @@
     return Number.isFinite(t.num) ? t.num : "";
   }
 
-  function inferDeviceTypeFromNo(token, fallback){
-    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
-    const raw = String(token || "").trim();
-    if (!raw) return fb;
-
-    const leftRaw = raw.includes("/") ? raw.split("/")[0].trim() : raw;
-
-    // remove trailing punctuation like "." "," ":" ")" etc
-    const left = leftRaw.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
-
-    if (left.startsWith("PPPO")) return "Material box";
-    if (/^CS\d+/.test(left)) return "Charging station";
-    if (/^H1\d+/.test(left)) return "Work Station";
-    if (/^H2\d+/.test(left)) return "Tally station";
-
-    const m = left.match(/\d+/);
-    const n = m ? Number(m[0]) : NaN;
-
-    if (Number.isFinite(n)) {
-      if (K50H_SET.has(n)) return "K50H";
-      if (A42T_E2_SET.has(n)) return "A42T-E2 hook";
-    }
-    return fb;
-  }
+  
 
 
   // ---------------------------
@@ -1012,9 +988,16 @@
   }
 
   function inferStationFromH(Htoken){
-    const m = String(Htoken).match(/^H(\d)/);
-    if (!m) return "Work Station";
-    return m[1] === "2" ? "Tally station" : "Work Station";
+    const U = String(Htoken || "").toUpperCase().trim();
+
+    // H2.. => Tally station
+    if (/^H2/.test(U)) return "Tally station";
+
+    // H1.. => Work Station
+    if (/^H1/.test(U)) return "Work Station";
+
+    // other Hxxx default
+    return "Work Station";
   }
 
   function generate(){
@@ -1072,5 +1055,27 @@ Rostyslav Mykhavko
 <noscript>
   <div style="padding:12px;color:#ffd37a;">JavaScript is disabled — buttons cannot work.</div>
 </noscript>
+<div style="
+  position:fixed;
+  bottom:8px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:10px;
+  opacity:0.35;
+  letter-spacing:1px;
+  z-index:999;
+">
+  <a href="https://lknzmzd.xyz"
+     target="_blank"
+     style="
+       text-decoration:none;
+       color:#8fa2ff;
+     "
+     onmouseover="this.style.opacity='1'"
+     onmouseout="this.style.opacity='0.35'"
+  >
+    © LKNZMZD
+  </a>
+</div>
 </body>
 </html>
