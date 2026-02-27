@@ -236,47 +236,175 @@
   ]);
 
   function extractDeviceNos(line){
-    const L = String(line);
+    let s = String(line || "");
 
-    // capture things like:
-    // 1866. ...
-    // CS256/1132 ...
-    // 764/H136 ...
-    // H174 ...
-    // 209,2145. ...
-    const head = L.split(".")[0]; // before first dot
-    // If dot missing, fallback to full line start
-    const prefix = head.length ? head : L;
+    // Remove times so we don't capture "06" and "44" as device numbers
+    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");      // 06:44
+    s = s.replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, " "); // 06:44:12
+    s = s.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g, " "); // 2026/02/26
 
-    // match all numeric IDs in the prefix
-    const nums = prefix.match(/\d+/g) || [];
+    // Capture device tokens:
+    // - PPPO123...
+    // - CS256/1132 , CS105
+    // - H174 , H136/764 (we will use LEFT side rule later)
+    // - 1111/H111 or H111/1111
+    // - plain numbers 1866. 2159, etc
+    const re = /\b(?:PPPO\d+|CS\d+(?:\/\d+)?|H\d+(?:\/\d+)?|\d+(?:\/H\d+)?|H\d+(?:\/\d+)?|\d+)\b/gi;
 
-    // return as original numeric strings (we normalize later anyway)
-    // but keep unique and preserve order
     const out = [];
-    for (const n of nums){
-      if (!out.includes(n)) out.push(n);
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      out.push(m[0]);
     }
-    return out;
+
+    // Also split comma lists like "209,2145"
+    const expanded = [];
+    for (const t of out) {
+      for (const part of String(t).split(",")) {
+        const x = part.trim();
+        if (x) expanded.push(x);
+      }
+    }
+
+    // Deduplicate while keeping order
+    const seen = new Set();
+    const uniq = [];
+    for (const t of expanded) {
+      const key = t.toUpperCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(t);
+      }
+    }
+    return uniq;
   }
 
-  function normalizeDeviceNo(x){
-    // "1866." -> 1866
-    // "CS256/1132" -> 256 (first number)
-    // "764/H136" -> 764 (first number)
-    // "H174" -> 174
-    const m = String(x).match(/\d+/);
-    return m ? Number(m[0]) : NaN;
+  // ---------------------------
+  // Device token parsing (ONE COPY ONLY)
+  // ---------------------------
+  function extractDeviceNos(line){
+    let s = String(line || "");
+
+    // remove times so we don't capture them as numbers
+    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");
+    s = s.replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, " ");
+    s = s.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g, " ");
+
+    // capture tokens in the whole line (not only at the beginning)
+    const re = /\b(?:PPPO\w+|CS\d+(?:\/\d+)?|H\d+(?:\/\d+)?|\d+(?:\/H\d+)?|\d+)\b/gi;
+
+    const out = [];
+    let m;
+    while ((m = re.exec(s)) !== null) out.push(m[0]);
+
+    // expand comma lists like "209,2145"
+    const expanded = [];
+    for (const t of out) {
+      for (const part of String(t).split(",")) {
+        const x = part.trim();
+        if (x) expanded.push(x);
+      }
+    }
+
+    // dedupe keeping order
+    const seen = new Set();
+    const uniq = [];
+    for (const t of expanded) {
+      const key = t.toUpperCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(t);
+      }
+    }
+    return uniq;
   }
 
-  function inferDeviceTypeFromNo(deviceNoRaw, fallback){
+  function inferStationFromH(Htoken){
+    const U = String(Htoken || "").toUpperCase();
+    // H1xx => Work Station, H2xx => Tally station
+    if (/^H2\d+/.test(U)) return "Tally station";
+    return "Work Station";
+  }
+
+  function normalizeDeviceToken(token){
+    const raw0 = String(token || "").trim();
+    if (!raw0) return { raw: "", left: "", num: NaN, prefix: "", hasSlash: false };
+
+    // strip punctuation around full token
+    const raw = raw0.replace(/^[^\w]+|[^\w]+$/g, "");
+    const U = raw.toUpperCase();
+
+    const hasSlash = U.includes("/");
+    const left = hasSlash ? U.split("/")[0].trim() : U;
+
+    let prefix = "NUM";
+    if (left.startsWith("PPPO")) prefix = "PPPO";
+    else if (left.startsWith("CS")) prefix = "CS";
+    else if (left.startsWith("H")) prefix = "H";
+
+    const m = left.match(/\d+/);
+    const num = m ? Number(m[0]) : NaN;
+
+    return { raw, U, left, num, prefix, hasSlash };
+  }
+
+  // Device Type column
+  function inferDeviceTypeFromNo(token, fallback){
     const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
-    const n = normalizeDeviceNo(deviceNoRaw);
-    if (!Number.isFinite(n)) return fb;
+    const t = normalizeDeviceToken(token);
+    if (!t.raw) return fb;
 
-    if (K50H_SET.has(n)) return "K50H";
-    if (A42T_E2_SET.has(n)) return "A42T-E2 hook";
+    // based on LEFT side rule:
+    // 1111/H111 -> robot
+    // H111/1111 -> station
+    if (t.prefix === "PPPO") return "Material box";
+    if (t.prefix === "CS") return "Charging station";
+    if (t.prefix === "H") return inferStationFromH(t.left);
 
+    // robot number mapping
+    if (!Number.isFinite(t.num)) return fb;
+    if (K50H_SET.has(t.num)) return "K50H";
+    if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
+
+    return fb;
+  }
+
+  // Device No column (THIS is where we keep H111/1111)
+  function normalizeDeviceNoForColumn(token){
+    const t = normalizeDeviceToken(token);
+    if (!t.raw) return "";
+
+    // keep full token for these cases
+    if (t.prefix === "PPPO") return t.raw;      // PPPO...
+    if (t.prefix === "CS") return t.raw;        // CS256/1132 (keep as text)
+    if (t.prefix === "H") return t.raw;         // H111/1111 MUST stay as H111/1111
+
+    // robot cases: "764/H136" => 764, "1111/H111" => 1111, "1866." => 1866
+    return Number.isFinite(t.num) ? t.num : "";
+  }
+
+  function inferDeviceTypeFromNo(token, fallback){
+    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
+    const raw = String(token || "").trim();
+    if (!raw) return fb;
+
+    const leftRaw = raw.includes("/") ? raw.split("/")[0].trim() : raw;
+
+    // remove trailing punctuation like "." "," ":" ")" etc
+    const left = leftRaw.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
+
+    if (left.startsWith("PPPO")) return "Material box";
+    if (/^CS\d+/.test(left)) return "Charging station";
+    if (/^H1\d+/.test(left)) return "Work Station";
+    if (/^H2\d+/.test(left)) return "Tally station";
+
+    const m = left.match(/\d+/);
+    const n = m ? Number(m[0]) : NaN;
+
+    if (Number.isFinite(n)) {
+      if (K50H_SET.has(n)) return "K50H";
+      if (A42T_E2_SET.has(n)) return "A42T-E2 hook";
+    }
     return fb;
   }
 
@@ -311,16 +439,6 @@
     return m ? m[1].replace(/\s+/g,"") : "";
   }
 
-  // Extract one or many device numbers:
-  //  "209,2145. ..." => ["209","2145"]
-  //  "764/H136. ..." => ["764/H136"]
-  //  "CS105,2099 . ..." => ["CS105","2099"]
-  function extractDeviceNos(line){
-    const head = line.trim().match(/^([A-Za-z]{0,3}\d+(?:\/[A-Za-z]?\d+)?(?:\s*,\s*[A-Za-z]{0,3}\d+(?:\/[A-Za-z]?\d+)?)*)\s*\./);
-    if(!head) return [""];
-    return head[1].split(",").map(x => x.trim()).filter(Boolean);
-  }
-
   // Split input into records with names
   function splitIntoRecords(raw){
     const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -332,33 +450,6 @@
       recs.push({name, line});
     }
     return recs;
-  }
-
-  function inferDeviceType(deviceNo, fallback = "K50H") {
-    const n = Number(deviceNo);
-    if (!Number.isFinite(n)) return fallback;
-
-    if (K50H_SET.has(n)) return "K50H";
-    if (A42T_E2_SET.has(n)) return "A42T-E2 hook";
-
-    return fallback; // unknown -> use selected/default
-  }
-
-  function inferDeviceType(deviceNo) {
-    const n = Number(deviceNo);
-    if (!Number.isFinite(n)) return "";
-
-    if (K50H_SET.has(n)) return DEVICE_TYPE.K50H;
-    if (A42T_E2_SET.has(n)) return DEVICE_TYPE.A42T_E2_HOOK;
-
-    return ""; // unknown
-  }
-
-  function extractDeviceNo(raw) {
-    // matches: "1169.", "1169 .", "CS105,2099", "764/H136"
-    // We'll take the FIRST numeric id in the line.
-    const m = raw.match(/\b(\d{2,5})\b/);
-    return m ? Number(m[1]) : "";
   }
 
   // ---------------------------
@@ -835,7 +926,7 @@
     }
 
     return deviceNosRaw.map((raw) => {
-      const deviceNo = normalizeDeviceNo(raw);
+      const deviceNo = normalizeDeviceNoForColumn(raw);
       const deviceType = inferDeviceTypeFromNo(raw, fallbackDeviceType);
 
       const endTime = startMin==null ? "" : minutesToHHMM(startMin + c.minutes);
@@ -860,31 +951,70 @@
     });
   }
 
-  function inferDeviceTypeFromNo(token, fallback){
-    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
+  function normalizeDeviceToken(token){
     const raw = String(token || "").trim();
-    if (!raw) return fb;
+    if (!raw) return { raw: "", left: "", num: NaN, prefix: "" };
 
-    // RULE: if token has "/", LEFT side decides
+    // IMPORTANT: device type is based on LEFT side of "/" as you requested:
+    // 1111/H111 -> LEFT=1111 => robot
+    // H111/1111 -> LEFT=H111 => station
     const leftRaw = raw.includes("/") ? raw.split("/")[0].trim() : raw;
-    const left = leftRaw.toUpperCase();
 
-    // Station prefixes (LEFT side only)
-    if (/^CS\d+/.test(left)) return "Charging station";
-    if (/^H1\d+/.test(left)) return "Work Station";
-    if (/^H2\d+/.test(left)) return "Tally station";
+    // strip punctuation around token (".", ",", ":" etc)
+    const left = leftRaw.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
 
-    // Material Box rule
-    if (/^PPPO/.test(left)) return "Material box";
+    // detect prefix
+    let prefix = "";
+    if (left.startsWith("PPPO")) prefix = "PPPO";
+    else if (left.startsWith("CS")) prefix = "CS";
+    else if (left.startsWith("H")) prefix = "H";
+    else prefix = "NUM";
 
-    // Robot number sets (LEFT side only)
-    const n = normalizeDeviceNo(left);
-    if (Number.isFinite(n)) {
-      if (K50H_SET.has(n)) return "K50H";
-      if (A42T_E2_SET.has(n)) return "A42T-E2 hook";
+    // first number inside token
+    const m = left.match(/\d+/);
+    const num = m ? Number(m[0]) : NaN;
+
+    return { raw, left, num, prefix };
+  }
+
+  function inferDeviceTypeFromNo(deviceNoRaw, fallback){
+    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
+    const t = normalizeDeviceToken(deviceNoRaw);
+
+    // Station / special tokens (based on LEFT side)
+    if (t.prefix === "PPPO") return "Material box";
+    if (t.prefix === "CS") return "Charging station";
+
+    // H1.. => Work Station, H2.. => Tally station
+    if (t.prefix === "H") {
+      if (/^H1\d+/.test(t.left)) return "Work Station";
+      if (/^H2\d+/.test(t.left)) return "Tally station";
+      return "Work Station"; // fallback for other Hxxx if you want
     }
 
+    // Robots: use numeric mapping sets
+    if (!Number.isFinite(t.num)) return fb;
+    if (K50H_SET.has(t.num)) return "K50H";
+    if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
+
     return fb;
+  }
+
+  // If you still need the "deviceNo" value for column 4:
+  function normalizeDeviceNoForColumn(token){
+    const t = normalizeDeviceToken(token);
+
+    // keep PPPO as text in the device number column (or return empty if you prefer)
+    if (t.prefix === "PPPO") return t.left;
+
+    // for CS256/1132, 764/H136, H174 => first number
+    return Number.isFinite(t.num) ? t.num : "";
+  }
+
+  function inferStationFromH(Htoken){
+    const m = String(Htoken).match(/^H(\d)/);
+    if (!m) return "Work Station";
+    return m[1] === "2" ? "Tally station" : "Work Station";
   }
 
   function generate(){
