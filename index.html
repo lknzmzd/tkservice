@@ -42,7 +42,7 @@
       <div class="row" style="margin-bottom:10px;">
         <label>
           <div class="small">Date (YYYY/MM/DD)</div>
-          <input id="date" value="2026/02/26" />
+          <input id="date" value="" placeholder="YYYY/MM/DD" />
         </label>
         <label>
           <div class="small">Default Device Type</div>
@@ -1003,6 +1003,22 @@ Rostyslav Mykhavko
     $("download").addEventListener("click", downloadTSV);
     $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; });
     $("loadExample").addEventListener("click", loadExample);
+
+    // ✅ Auto-set today's date (YYYY/MM/DD)
+    (function setTodayDate(){
+      const el = $("date");
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const v = `${yyyy}/${mm}/${dd}`;
+
+      // only override if empty or still old hardcoded value
+      if (!el.value.trim() || el.value.trim() === "2026/02/26") {
+        el.value = v;
+      }
+    })();
+
     console.log("Issue Log Fixer loaded ✅");
   });
 
