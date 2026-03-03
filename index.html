@@ -552,6 +552,46 @@
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
+    // ---- Remote emergency stop triggered (System) ----
+    if (L.includes("remote emergency stop")) {
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.RobotSafetyTriggered;
+      subType = SUB.ProgramBug;
+      issueDesc = "Remote emergency stop triggered";
+      recovery = "Recovery";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Front bumper triggered in tally station + system bug (Two robots collide) ----
+    if (
+      (L.includes("front bumper triggered") || (L.includes("bumper") && L.includes("triggered"))) &&
+      (L.includes("tally station") || L.includes("in tally")) &&
+      (L.includes("system bug") || L.includes("bug"))
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.TwoRobotsCollide;
+      subType = SUB.ProgramBug;
+      issueDesc = "Front bumper triggered in tally station, system bug.";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Failed connect to server / network disconnected ----
+    if (
+      (L.includes("failed connect to server") || L.includes("failed to connect to server") || L.includes("cannot connect to server")) &&
+      (L.includes("network disconnected") || L.includes("disconnected") || L.includes("network down"))
+    ){
+      issueType = ISSUE_TYPE.Network;
+      quick = QUICK.NetAbn;
+      subType = SUB.ProgramBug;
+      issueDesc = "Failed connect to server, network disconnected.";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     // ---- all protection triggers released / abnormal lifting mechanism ----
     if (L.includes("all protection triggers") || (L.includes("abnormal lifting") && L.includes("mechanism"))){
       issueType = ISSUE_TYPE.Equipment;
