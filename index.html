@@ -236,110 +236,39 @@
   ]);
 
   function extractDeviceNos(line){
-    const s0 = String(line || "").trim();
-    if (!s0) return [];
+    let s = String(line || "").trim();
+    if (!s) return [];
 
-    // Only take the prefix BEFORE the first dot:
-    // "209,2145. Collision of 2 robots..." -> "209,2145"
-    const prefix = s0.split(".")[0].trim();
+    // remove time at end so it doesn't get captured as device token
+    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");
 
-    // Now split by comma and clean
-    const parts = prefix.split(",").map(x => x.trim()).filter(Boolean);
+    const tokens = [];
 
-    // Keep only valid device tokens (robot/station/material patterns)
-    // Examples allowed: 209, 2145, H211/1111, 1111/H111, CS256/1132, PPPO123...
-    const valid = [];
-    for (const p of parts){
-      const U = p.toUpperCase();
-      if (
-        /^PPPO\d+/.test(U) ||
-        /^CS\d+(?:\/\d+)?$/.test(U) ||
-        /^H\d+(?:\/\d+)?$/.test(U) ||
-        /^\d+(?:\/H\d+)?$/.test(U) ||
-        /^\d+$/.test(U)
-      ){
-        valid.push(p);
-      }
+    // We accept:
+    // "H126,2211. ..."  (correct)
+    // "H126. 2211. ..." (people mistake dot instead of comma -> we still parse)
+    //
+    // Loop: keep consuming "<token(s)>." from the start
+    while (true){
+      const m = s.match(/^\s*([A-Za-z0-9\/]+(?:\s*,\s*[A-Za-z0-9\/]+)*)\s*\.\s*(.*)$/);
+      if (!m) break;
+
+      const head = m[1];
+      s = m[2];
+
+      head.split(",").forEach(t => {
+        t = t.trim();
+        if (t) tokens.push(t);
+      });
+
+      // If next part starts with "someToken." again, the loop continues (for H126. 2211.)
+      // If next part is sentence text, loop ends.
+      if (!/^\s*[A-Za-z0-9\/]+\s*\./.test(s)) break;
     }
 
-    // Deduplicate
-    const seen = new Set();
-    const out = [];
-    for (const t of valid){
-      const key = t.toUpperCase();
-      if (!seen.has(key)){
-        seen.add(key);
-        out.push(t);
-      }
-    }
-    return out;
+    // If nothing was found by the strict "start-of-line" rule, return empty
+    return tokens;
   }
-
-  function inferStationFromH(Htoken){
-    const U = String(Htoken || "").toUpperCase();
-    // H1xx => Work Station, H2xx => Tally station
-    if (/^H2\d+/.test(U)) return "Tally station";
-    return "Work Station";
-  }
-
-  function normalizeDeviceToken(token){
-    const raw0 = String(token || "").trim();
-    if (!raw0) return { raw: "", left: "", num: NaN, prefix: "", hasSlash: false };
-
-    // strip punctuation around full token
-    const raw = raw0.replace(/^[^\w]+|[^\w]+$/g, "");
-    const U = raw.toUpperCase();
-
-    const hasSlash = U.includes("/");
-    const left = hasSlash ? U.split("/")[0].trim() : U;
-
-    let prefix = "NUM";
-    if (left.startsWith("PPPO")) prefix = "PPPO";
-    else if (left.startsWith("CS")) prefix = "CS";
-    else if (left.startsWith("H")) prefix = "H";
-
-    const m = left.match(/\d+/);
-    const num = m ? Number(m[0]) : NaN;
-
-    return { raw, U, left, num, prefix, hasSlash };
-  }
-
-  function inferDeviceTypeFromNo(token, fallback){
-    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
-    const t = normalizeDeviceToken(token);
-    if (!t.raw) return fb;
-
-    // LEFT-side rule:
-    // 1111/H111 -> robot
-    // H111/1111 -> station
-    if (t.prefix === "PPPO") return "Material box";
-    if (t.prefix === "CS") return "Charging station";
-    if (t.prefix === "H")  return inferStationFromH(t.left);
-
-    // robot set mapping
-    if (!Number.isFinite(t.num)) return fb;
-    if (K50H_SET.has(t.num)) return "K50H";
-    if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
-
-    return fb;
-  }
-
-  // Device No column (THIS is where we keep H111/1111)
-  function normalizeDeviceNoForColumn(token){
-    const t = normalizeDeviceToken(token);
-    if (!t.raw) return "";
-
-    // keep full token for these cases
-    if (t.prefix === "PPPO") return t.raw;      // PPPO...
-    if (t.prefix === "CS") return t.raw;        // CS256/1132 (keep as text)
-    if (t.prefix === "H") return t.raw;         // H111/1111 MUST stay as H111/1111
-
-    // robot cases: "764/H136" => 764, "1111/H111" => 1111, "1866." => 1866
-    return Number.isFinite(t.num) ? t.num : "";
-  }
-
-  
-
 
   // ---------------------------
   // Helpers
@@ -769,6 +698,21 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
+    // ---- wrong way after picking -> collision with rack ----
+    if (
+      (L.includes("wrong way") || L.includes("drive wrong way") || L.includes("drives wrong way")) &&
+      (L.includes("after picking") || L.includes("after pick")) &&
+      (L.includes("collision with rack") || L.includes("collided with rack") || L.includes("hit the rack") || L.includes("collision with the rack"))
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.CollisionShelf;
+      subType = SUB.WrongPickPlace;
+      issueDesc = "Drives wrong way, after picking and collided with a rack";
+      recovery = "Recovery";
+      minutes = 4; // change if you want
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (L.includes("obstacle on the path") && L.includes("dopped item")) {
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.DropBox;
@@ -884,29 +828,24 @@
   }
 
   function normalizeDeviceToken(token){
-    const raw = String(token || "").trim();
-    if (!raw) return { raw: "", left: "", num: NaN, prefix: "" };
+    const raw0 = String(token || "").trim();
+    if (!raw0) return { raw: "", left: "", num: NaN, prefix: "", hasSlash: false, U: "" };
 
-    // IMPORTANT: device type is based on LEFT side of "/" as you requested:
-    // 1111/H111 -> LEFT=1111 => robot
-    // H111/1111 -> LEFT=H111 => station
-    const leftRaw = raw.includes("/") ? raw.split("/")[0].trim() : raw;
+    const raw = raw0.replace(/^[^\w\/]+|[^\w\/]+$/g, "");
+    const U = raw.toUpperCase();
 
-    // strip punctuation around token (".", ",", ":" etc)
-    const left = leftRaw.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
+    const hasSlash = U.includes("/");
+    const left = hasSlash ? U.split("/")[0].trim() : U;
 
-    // detect prefix
-    let prefix = "";
+    let prefix = "NUM";
     if (left.startsWith("PPPO")) prefix = "PPPO";
     else if (left.startsWith("CS")) prefix = "CS";
     else if (left.startsWith("H")) prefix = "H";
-    else prefix = "NUM";
 
-    // first number inside token
     const m = left.match(/\d+/);
     const num = m ? Number(m[0]) : NaN;
 
-    return { raw, left, num, prefix };
+    return { raw, U, left, num, prefix, hasSlash };
   }
 
   function inferDeviceTypeFromNo(deviceNoRaw, fallback){
@@ -935,11 +874,17 @@
   // If you still need the "deviceNo" value for column 4:
   function normalizeDeviceNoForColumn(token){
     const t = normalizeDeviceToken(token);
+    if (!t.raw) return "";
 
-    // keep PPPO as text in the device number column (or return empty if you prefer)
-    if (t.prefix === "PPPO") return t.left;
+    // if token contains "/" we KEEP FULL token always
+    if (t.hasSlash) return t.U.replace(/\s+/g, "");
 
-    // for CS256/1132, 764/H136, H174 => first number
+    // keep full token for station/special
+    if (t.prefix === "PPPO") return t.raw;
+    if (t.prefix === "CS") return t.raw;
+    if (t.prefix === "H") return t.raw;
+
+    // plain robot -> number
     return Number.isFinite(t.num) ? t.num : "";
   }
 
