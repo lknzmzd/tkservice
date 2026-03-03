@@ -27,12 +27,96 @@
     .warn { color:#ffd37a; }
     code { background:#0b0c10; border:1px solid #262a3b; padding: 2px 6px; border-radius: 8px; }
     @media (max-width: 980px){ main { grid-template-columns: 1fr; } }
+    /* ---- Interactivity ---- */
+    textarea:focus, input:focus { outline: 2px solid #2e3aa0; outline-offset: 2px; }
+    .badge { display:inline-flex; gap:8px; align-items:center; font-size:12px; opacity:.85; }
+    .dot { width:10px; height:10px; border-radius:999px; background:#3a3f57; display:inline-block; }
+    .dot.ok { background:#1f6b44; }
+    .dot.warn { background:#ffd37a; }
+    .dot.err { background:#ff6b6b; }
+
+    .toast {
+      position:fixed; left:50%; bottom:56px; transform:translateX(-50%);
+      background:#121525; border:1px solid #2a2f44; padding:10px 12px; border-radius:12px;
+      font-size:12px; opacity:0; pointer-events:none; transition:opacity .2s ease;
+      z-index:1000;
+    }
+    .toast.show { opacity:1; }
+
+    .bottomBar{
+      position:fixed; left:0; right:0; bottom:0;
+      background:rgba(13,15,22,.9); border-top:1px solid #1f2230;
+      padding:10px 12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
+      backdrop-filter: blur(8px);
+      z-index:1000;
+    }
+    .bottomBar button{ min-width:140px; }
+    body{ padding-bottom:72px; } /* space for bottom bar */
+    .smallRow { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+    .counter { font-size:12px; opacity:.75; }
+    .rulesPanel{
+      margin-top:10px;
+      border:1px solid #1f2230;
+      background:#0d0f16;
+      border-radius:12px;
+      padding:8px 10px;
+    }
+    .rulesPanel > summary{
+      cursor:pointer;
+      font-size:15px;
+      opacity:.9;
+    }
+    .rulesBody{
+      padding:10px 6px 4px 6px;
+      font-size:12px;
+      opacity:.85;
+      line-height:1.45;
+    }
+    .rulesBody ul{ margin:0; padding-left:18px; }
   </style>
 </head>
 <body>
+
 <header>
   <h1>Issue Log Fixer → TSV (Feishu-friendly)</h1>
   <p>Paste raw logs → Generate TSV → paste into Feishu. Keeps Device Type → Quality(empty) → Device No.</p>
+  <div class="smallRow" style="margin-bottom:8px; justify-content:flex-start;">
+    <span class="badge">
+      <span id="rawDot" class="dot"></span>
+      Raw input
+      <span id="rowCount" class="counter" style="margin-left:10px;">Rows: 0</span>
+    </span>
+  </div>
+  <div class="smallRow" style="margin-bottom:8px;">
+    <span class="badge"><span id="outDot" class="dot"></span>Output</span>
+    <span id="warnText" class="counter"></span>
+  </div>
+  <details class="rulesPanel">
+    <summary>Rules (click to expand)</summary>
+    <div class="rulesBody">
+      <ul>
+        <li>Input format: <code>Device number. message. HH:MM</code></li>
+        <li> • 209. → Robot  //  • H1xx. → Station  //  • H2xxx. → Tally Station  //  • CSxxx. → Station  //  • PPPOxxx. → Material box</li>
+        <li>Device number must be before the first dot.</li>
+        <li> Always use the error template (standard wording).</li>
+        <li>Always end with time in format HH:MM.</li>
+        <li> Do NOT write device numbers inside the sentence.</li>
+        <li>Shift stats auto-reset at <b>06:00</b> and <b>18:00</b>.</li>
+      </ul>
+    </div>
+  </details>
+  
+  <div class="smallRow" style="margin-bottom:8px;">
+    <span class="badge"><span id="shiftDot" class="dot ok"></span>Shift rows</span>
+
+    <span class="counter">
+      <span id="shiftLabel">—</span>
+      · Total: <b id="shiftTotal">0</b>
+      <button id="resetRows" type="button" style="margin-left:10px; padding:4px 8px; font-size:12px;">
+        Reset rows
+      </button>
+    </span>
+  </div>
 </header>
 
 <main>
@@ -72,7 +156,6 @@
       </div>
     </div>
   </section>
-
   <section class="card">
     <h2>2) Output (TSV)</h2>
     <div class="body">
@@ -268,6 +351,14 @@
 
     // If nothing was found by the strict "start-of-line" rule, return empty
     return tokens;
+  }
+
+  function clearOtherShiftsKeepCurrent(){
+    const { store, shift } = getShiftBucket();
+    // Keep ONLY current shift (optional behavior, matches “clear every 12h”)
+    const kept = {};
+    kept[shift.key] = store[shift.key];
+    saveShiftStore(kept);
   }
 
   // ---------------------------
@@ -941,13 +1032,87 @@
     return "Work Station";
   }
 
-  function generate(){
-    const recs = splitIntoRecords($("raw").value);
-    const outLines = [];
-    for(const rec of recs){
-      outLines.push(...buildRows(rec));
+  const SHIFT_COUNT_KEY = "issue_log_shift_counts_v1";
+  function pad2(n){ return String(n).padStart(2,"0"); } // keep only one pad2 in your file
+  function ymd(d){
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  }
+
+  function getCurrentShiftInfo(now = new Date()){
+    const minutes = now.getHours()*60 + now.getMinutes();
+
+    if(minutes >= 360 && minutes < 1080){
+      const dateKey = ymd(now);
+      return { key: `${dateKey}_DAY`, label: `${dateKey} 06:00–18:00 (Day)` };
     }
-    $("out").value = outLines.join("\n");
+
+    const startDate = new Date(now);
+    if(minutes < 360) startDate.setDate(startDate.getDate() - 1);
+    const dateKey = ymd(startDate);
+    return { key: `${dateKey}_NIGHT`, label: `${dateKey} 18:00–06:00 (Night)` };
+  }
+
+  function loadShiftCounts(){
+    try { return JSON.parse(localStorage.getItem(SHIFT_COUNT_KEY) || "{}"); }
+    catch { return {}; }
+  }
+
+  function saveShiftCounts(obj){
+    localStorage.setItem(SHIFT_COUNT_KEY, JSON.stringify(obj));
+  }
+
+  function addRowsToShift(n){
+    const shift = getCurrentShiftInfo();
+    const store = loadShiftCounts();
+    store[shift.key] = store[shift.key] || { label: shift.label, total: 0 };
+    store[shift.key].total += n;
+    saveShiftCounts(store);
+    return { shift, total: store[shift.key].total };
+  }
+
+  function resetShiftRows(){
+    const shift = getCurrentShiftInfo();
+    const store = loadShiftCounts();
+    store[shift.key] = store[shift.key] || { label: shift.label, total: 0 };
+    store[shift.key].total = 0;
+    saveShiftCounts(store);
+    return { shift, total: 0 };
+  }
+
+  function getShiftTotal(){
+    const shift = getCurrentShiftInfo();
+    const store = loadShiftCounts();
+    const total = store[shift.key]?.total || 0;
+    return { shift, total };
+  }
+
+  function updateShiftLabel(){
+    const info = getShiftTotal();
+    const labelEl = document.getElementById("shiftLabel");
+    const totalEl = document.getElementById("shiftTotal");
+    if(labelEl) labelEl.textContent = info.shift.label;
+    if(totalEl) totalEl.textContent = String(info.total);
+  }
+
+  let lastRawSnapshot = "";
+  function generate(){
+    const rawText = ($("raw").value || "").trim();
+
+    const recs = splitIntoRecords(rawText);
+    const newLines = [];
+    for(const rec of recs){
+      newLines.push(...buildRows(rec));
+    }
+
+    const cleaned = newLines.map(x => String(x).trim()).filter(Boolean);
+
+    // Output shows ONLY current generation
+    $("out").value = cleaned.join("\n");
+
+    // ✅ Always add to shift total when user clicks Generate
+    addRowsToShift(cleaned.length);
+    updateShiftLabel();
+    updateUIStates();
   }
 
   async function copyTSV(){
@@ -982,12 +1147,85 @@ Rostyslav Mykhavko
 209,2145. Collision of 2 robots. Robots collided, while Kiva tried to take a case. Change of position and recovery. 06:53`;
   }
 
+  function toast(msg){
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>t.classList.remove("show"), 1200);
+  }
+
+  function setDot(id, state){
+    const el = $(id);
+    el.className = "dot";
+    if(state==="ok") el.classList.add("ok");
+    if(state==="warn") el.classList.add("warn");
+    if(state==="err") el.classList.add("err");
+  }
+
+  function validateRaw(raw){
+    const lines = raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    let warn = 0;
+
+    for(const line of lines){
+      // skip name lines (your existing logic)
+      const isName = !/[0-9]/.test(line) && !/\./.test(line) && line.length <= 60;
+      if(isName) continue;
+
+      // needs HH:MM somewhere
+      if(!/\b\d{1,2}:\d{2}\b/.test(line)) warn++;
+
+      // must have device token before first dot
+      if(!/^\s*[A-Za-z0-9\/,\s]+\s*\./.test(line)) warn++;
+    }
+
+    return { warn, lines: lines.length };
+  }
+
+  function updateUIStates(){
+    const raw = $("raw").value || "";
+    const out = $("out").value || "";
+
+    const v = validateRaw(raw);
+    $("rowCount").textContent = `Rows: ${out ? out.split("\n").filter(Boolean).length : 0}`;
+
+    if(!raw.trim()){
+      setDot("rawDot",""); 
+      $("warnText").textContent = "";
+    } else if(v.warn > 0){
+      setDot("rawDot","warn");
+      $("warnText").textContent = `Warnings: ${v.warn}`;
+    } else {
+      setDot("rawDot","ok");
+      $("warnText").textContent = "";
+    }
+
+    if(!out.trim()) setDot("outDot","");
+    else setDot("outDot","ok");
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     $("gen").addEventListener("click", generate);
     $("copy").addEventListener("click", copyTSV);
     $("download").addEventListener("click", downloadTSV);
     $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; });
     $("loadExample").addEventListener("click", loadExample);
+
+    // UI updates only (NO auto-generate)
+    $("raw").addEventListener("input", updateUIStates);
+    $("raw").addEventListener("paste", () => setTimeout(updateUIStates, 0));
+    $("out").addEventListener("input", updateUIStates);
+
+    $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; updateUIStates(); });
+    $("loadExample").addEventListener("click", () => { loadExample(); updateUIStates(); });
+
+    $("resetRows")?.addEventListener("click", () => {
+      resetShiftRows();
+      updateShiftLabel();
+      toast("Shift rows reset ✅");
+    });
+
+    updateShiftLabel();
 
     // ✅ Auto-set today's date (YYYY/MM/DD)
     (function setTodayDate(){
@@ -998,15 +1236,36 @@ Rostyslav Mykhavko
       const dd = String(today.getDate()).padStart(2, "0");
       const v = `${yyyy}/${mm}/${dd}`;
 
+      // Ctrl+Enter => generate
+      $("raw").addEventListener("keydown", (e) => {
+        if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+          generate(); updateUIStates();
+          toast("Generated ✅");
+        }
+      });
+
+      // Replace alerts in copyTSV with toast (optional quick patch)
+      const oldCopy = copyTSV;
+      copyTSV = async function(){
+        const text = $("out").value;
+        if(!text){ toast("Output is empty"); return; }
+        try{
+          await navigator.clipboard.writeText(text);
+          toast("Copied ✅");
+        }catch(e){
+          $("out").focus(); $("out").select();
+          toast("Ctrl+C (clipboard blocked)");
+        }
+      }
+
       // only override if empty or still old hardcoded value
       if (!el.value.trim() || el.value.trim() === "2026/02/26") {
         el.value = v;
       }
     })();
-
     console.log("Issue Log Fixer loaded ✅");
+    updateShiftLabel();
   });
-
 })();
 </script>
 <noscript>
