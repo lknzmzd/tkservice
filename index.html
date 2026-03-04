@@ -324,6 +324,7 @@
     SecurityModule: "安全模块故障Security module failure",
     ProgramBug: "程序逻辑BUG Program logic bug",
     HardwareDamage: "硬件损坏 Hardware damage",
+    CrossBeam: "跨梁凸起 Cross beam",
     ChassisCam: "底盘相机故障 Chassis camera malfunction"
   };
 
@@ -1074,7 +1075,7 @@
       L.includes("cross beam")
     ){
       issueType = ISSUE_TYPE.Construction;
-      quick = QUICK.AbnormalPickUpAndDelivery;
+      quick = QUICK.AbnormalPick;
       subType = SUB.CrossBeam;
       issueDesc = "Failed to place a case, cross beam damaged.";
       recovery = "Recovery";
