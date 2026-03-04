@@ -323,6 +323,7 @@
     MaterialSuperHigh: "物料超高 Material super high",
     SecurityModule: "安全模块故障Security module failure",
     ProgramBug: "程序逻辑BUG Program logic bug",
+    HardwareDamage: "硬件损坏 Hardware damage",
     ChassisCam: "底盘相机故障 Chassis camera malfunction"
   };
 
@@ -569,15 +570,18 @@
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
-    // ---- obstacle detection in tally station ----
-    if(L.includes("obstacle detection in tally station")){
-      issueType = ISSUE_TYPE.Equipment;
+    // ---- Obstacle detection + system bug -> System / Obstacle avoidance / Program bug ----
+    if (
+      (L.includes("obstacle detection") || L.includes("obstacle detected")) &&
+      (L.includes("system bug") || L.includes("bug"))
+    ){
+      issueType = ISSUE_TYPE.System;
       quick = QUICK.ObstacleAvoid;
-      subType = SUB.CannotLocate;
-      issueDesc = "Obstacle detection in tally station";
+      subType = SUB.ProgramBug;
+      issueDesc = "Obstacle detection, system bug";
       recovery = "Recovery";
-      minutes = 4;
-      return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+      minutes = 2; // change if needed
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
     if (L.includes("lost his track in tally station")) {
@@ -712,6 +716,21 @@
       recovery = "Recovery";
       minutes = 2;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+    }
+
+    // ---- Speed detection module failure / safety sensors triggered ----
+    if (
+      L.includes("speed detection module failure") ||
+      (L.includes("speed detection") && L.includes("module failure")) ||
+      (L.includes("speed detection") && L.includes("safety sensors"))
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.SpeedError;
+      subType = SUB.SecurityModuleFail;
+      issueDesc = "Speed detection module failure";
+      recovery = "Recovery";
+      minutes = 2;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
     // ---- Remote emergency stop triggered (System) ----
@@ -886,6 +905,50 @@
       issueDesc = "Abnormal operation, system bug. Second box moved out.";
       recovery = "Second box moved out.";
       minutes = 3; // change if you want
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Standing without sound -> Unable to drive / Program bug ----
+    if (
+      L.includes("standing without sound") ||
+      (L.includes("standing") && L.includes("without sound"))
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.UnableDrive;
+      subType = SUB.ProgramBug;
+      issueDesc = "Standing without sound";
+      recovery = "Remote recovery";
+      minutes = 2;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Box stuck / unknown / putaway convertline ----
+    if (
+      L.includes("box stuck") &&
+      L.includes("putaway") &&
+      L.includes("convertline") &&
+      (L.includes("unknown") || L.includes("unknown reason"))
+    ){
+      issueType = ISSUE_TYPE.Unknown;     // 未知Unknown
+      quick = QUICK.BoxStuck;             // 卡箱异常Box stuck
+      subType = SUB.IrregularOp;          // 操作不规范 Irregular operation
+      issueDesc = "Box stuck on putaway convertline, unknown.";
+      recovery = "Remove the box";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Box stuck / scanner problem / putaway convertline ----
+    if (
+      L.includes("box stuck") &&
+      (L.includes("scanner") || L.includes("convertline"))
+    ){
+      issueType = ISSUE_TYPE.Customer;
+      quick = QUICK.BoxStuck;
+      subType = SUB.HardwareDamage;
+      issueDesc = "Scanner problem, putaway convertline.";
+      recovery = "Remove the box.";
+      minutes = 3;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -1385,7 +1448,6 @@ Rostyslav Mykhavko
   ". Unable to drive. Lost track, no sound. Recovery.",
   ". Unable to drive. System error, unknown. Recovery.",
   ". Unable to drive. Lost track in tally station. Recovery.",
-  ". Unable to drive. Obstacle detection in tally station. Recovery.",
   ". Unable to drive. Moving abnormal. Recovery.",
   ". Unable to drive. Obstacle on the path dropped box. Moved out.",
   ". Unable to drive. Obstacle on the path dropped item. Moved out.",
@@ -1399,13 +1461,15 @@ Rostyslav Mykhavko
 
   ". All protection triggers released. Abnormal lifting mechanism. Recovery.",
   ". Abnormal box delivery. Failed to place a case, dropped case. Recovery.",
-  ". Battery communication failure. Unknown reason. Recovery.",
-  ". Could not find DM code on the floor. Chassis drive failure. Recovery.",
 
+  ". Battery communication failure. Unknown reason. Recovery.",
+  ". Box stuck. Scanner problem, putaway convertline. Remove the box.",
+  ". Box stuck.  Unknown, putaway convertline. Remove the box.",
+
+  ". Could not find DM code on the floor. Chassis drive failure. Recovery.",
   ". Collision of 2 robots. Robots collided, problem cannot be located. Change of position and recovery.",
   ". Collision of 2 robots. Robots collided while Kiva tried to take a case. Change of position and recovery.",
   ". Collision of 2 robots. Robots collided while Kubot tried to take a case. Change of position and recovery.",
-
   ". Charging failure. Parameter configuration error. Changed mode to Auto.",
   ". Charging failure. Parameter configuration error. Changed mode to Dynamic.",
 
@@ -1416,15 +1480,12 @@ Rostyslav Mykhavko
   ". Emergency stop button triggered. Rear emergency stop button damaged. Recovery.",
 
   ". Failed to connect to server. Network disconnected. Recovery.",
-
   ". Failed to take a case. Wrong box position. Recovery.",
   ". Failed to take a case. Unknown reason. Recovery.",
   ". Failed to place a case. Unknown reason. Recovery.",
-
   ". Failed to take the box. Hit the workstation. Change of position and recovery.",
   ". Failed to deliver a case. Irregular operation on tally station. Box moved out.",
   ". Failed to place a case. Material box too high. Recovery.",
-
   ". Front bumper triggered in tally station. Robot collision, system bug. Recovery.",
 
   ". Kiva failed to place a case. Tote misaligned during transfer, hanging diagonally in rack. Recovery.",
@@ -1434,20 +1495,20 @@ Rostyslav Mykhavko
   ". No object detected after picking on lifting tray. Can't take case from station. Case placed on robot, recovery.",
   ". No object detected after picking on lifting tray. Can't take case from conveyor. Case placed on robot, recovery.",
   ". No object detected after picking on lifting tray. Lifting height error. Case placed on robot, recovery.",
-
   ". No task for the box. System bug. Remove the box manually.",
+
+  ". Obstacle detection. System bug. Recovery.",
 
   ". Personal detection monitor failure. Security module failure. Recovery.",
 
   ". Remote emergency stop triggered. System bug. Recovery.",
-
   ". Robot placed box incorrectly on station. Box position corrected. Recovery.",
 
   ". Safety vest detection speed monitor failure. Vest reaction. Recovery.",
-
   ". Safety communication failure. System bug. Recovery.",
   ". Safety self check failure. Security module failure. Recovery.",
-
+  ". Standing without sound. Unknown. Remote recovery.",
+  ". Speed detection module failure. Safety sensors triggered. Recovery.",
   ". Speed error. Drive component exception. Recovery."
   ];
 
