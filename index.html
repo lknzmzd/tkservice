@@ -73,6 +73,77 @@
       line-height:1.45;
     }
     .rulesBody ul{ margin:0; padding-left:18px; }
+
+    /* ---------- Templates UI ---------- */
+    .templateBtn{
+      position:fixed;
+      top:14px;
+      right:14px;
+      z-index:3000;
+      background:#1a2455;
+      border:1px solid #2e3aa0;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:13px;
+    }
+
+    .templatePanel{
+      position:fixed;
+      top:0;
+      right:-380px;
+      width:360px;
+      height:100%;
+      background:#0d0f16;
+      border-left:1px solid #1f2230;
+      z-index:3001;
+      transition:right 0.3s ease;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .templatePanel.open{
+      right:0;
+    }
+
+    .templateHeader{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:12px;
+      border-bottom:1px solid #1f2230;
+      font-weight:600;
+    }
+
+    .templateList{
+      padding:12px;
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .templateItem{
+      border:1px solid #262a3b;
+      padding:10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:12px;
+      line-height:1.4;
+      transition:0.2s;
+    }
+
+    .templateItem:hover{
+      background:#1a2455;
+    }
+
+    .copySuccess{
+      background:#1f6b44 !important;
+      border-color:#2fa96d !important;
+      color:#fff !important;
+    }
+
   </style>
 </head>
 <body>
@@ -96,7 +167,7 @@
     <div class="rulesBody">
       <ul>
         <li>Input format: <code>Device number. message. HH:MM</code></li>
-        <li> • 209. → Robot  //  • H1xx. → Station  //  • H2xxx. → Tally Station  //  • CSxxx. → Station  //  • PPPOxxx. → Material box</li>
+        <li> • 209 → Robot  //  • H1xx/ → Station  //  • H2xx/ → Tally Station  //  • CSxxx/ → Station  //  • PPPOxxx/ → Material box  // • BigLoop/ → Conveyor Line</li>
         <li>Device number must be before the first dot.</li>
         <li> Always use the error template (standard wording).</li>
         <li>Always end with time in format HH:MM.</li>
@@ -803,6 +874,21 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
+    // ---- Dropped box + abnormal operation + system bug -> System / Drop Box / Program bug ----
+    if (
+      L.includes("dropped box") &&
+      (L.includes("abnormal operation") || L.includes("abnormal") && L.includes("operation")) &&
+      (L.includes("system bug") || (L.includes("system") && L.includes("bug")))
+    ){
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.DropBox;         // 掉箱子或掉落件Drop Box or items
+      subType = SUB.ProgramBug;      // 程序逻辑BUG Program logic bug
+      issueDesc = "Abnormal operation, system bug. Second box moved out.";
+      recovery = "Second box moved out.";
+      minutes = 3; // change if you want
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (L.includes("remote emergency stop")) {
       issueType = ISSUE_TYPE.System;
       quick = QUICK.RobotSafetyTriggered;
@@ -1169,6 +1255,7 @@ Rostyslav Mykhavko
 
   function toast(msg){
     const t = $("toast");
+    if(!t) return; // prevents crash if missing
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(toast._t);
@@ -1286,6 +1373,194 @@ Rostyslav Mykhavko
     console.log("Issue Log Fixer loaded ✅");
     updateShiftLabel();
   });
+
+  // ---------- ERROR TEMPLATES ----------
+  const ERROR_TEMPLATES = [
+  ". Unable to drive. Missing DM code. Recovery key and set to DM code.",
+  ". Unable to drive. Foreign object on the floor. DM was cleaned, recovery key.",
+  ". Unable to drive. Uneven ground. Recovery.",
+  ". Unable to drive. Ground seam effect. Recovery.",
+  ". Unable to drive. Abnormal chasing. Recovery.",
+  ". Unable to drive. Wrong way after picking, collision with rack. Recovery.",
+  ". Unable to drive. Lost track, no sound. Recovery.",
+  ". Unable to drive. System error, unknown. Recovery.",
+  ". Unable to drive. Lost track in tally station. Recovery.",
+  ". Unable to drive. Obstacle detection in tally station. Recovery.",
+  ". Unable to drive. Moving abnormal. Recovery.",
+  ". Unable to drive. Obstacle on the path dropped box. Moved out.",
+  ". Unable to drive. Obstacle on the path dropped item. Moved out.",
+  ". Unable to drive. Unknown reason. Recovery.",
+
+  ". Unable to rotate. Dirty DM code. DM was cleaned, recovery key.",
+  ". Unable to rotate. Foreign object on the floor. DM was cleaned, recovery key.",
+  ". Unable to rotate. Missing DM code. Recovery key and set to DM code.",
+  ". Unable to rotate. Lifting mechanism failure. Recovery.",
+  ". Unable to rotate. Unknown reason. Recovery.",
+
+  ". All protection triggers released. Abnormal lifting mechanism. Recovery.",
+  ". Abnormal box delivery. Failed to place a case, dropped case. Recovery.",
+  ". Battery communication failure. Unknown reason. Recovery.",
+  ". Could not find DM code on the floor. Chassis drive failure. Recovery.",
+
+  ". Collision of 2 robots. Robots collided, problem cannot be located. Change of position and recovery.",
+  ". Collision of 2 robots. Robots collided while Kiva tried to take a case. Change of position and recovery.",
+  ". Collision of 2 robots. Robots collided while Kubot tried to take a case. Change of position and recovery.",
+
+  ". Charging failure. Parameter configuration error. Changed mode to Auto.",
+  ". Charging failure. Parameter configuration error. Changed mode to Dynamic.",
+
+  ". External retrieval abnormal. Unknown reason. Recovery.",
+
+  ". Emergency stop button triggered. Front emergency stop button damaged. Recovery.",
+  ". Emergency stop button triggered. Rear emergency stop button damaged. Recovery.",
+
+  ". Failed to connect to server. Network disconnected. Recovery.",
+
+  ". Failed to take a case. Wrong box position. Recovery.",
+  ". Failed to take a case. Unknown reason. Recovery.",
+  ". Failed to place a case. Unknown reason. Recovery.",
+
+  ". Failed to take the box. Hit the workstation. Change of position and recovery.",
+  ". Failed to deliver a case. Irregular operation on tally station. Box moved out.",
+  ". Failed to place a case. Material box too high. Recovery.",
+
+  ". Front bumper triggered in tally station. Robot collision, system bug. Recovery.",
+
+  ". Kiva failed to place a case. Tote misaligned during transfer, hanging diagonally in rack. Recovery.",
+
+  ". Lost box. Unknown reason. Moved out.",
+
+  ". No object detected after picking on lifting tray. Can't take case from station. Case placed on robot, recovery.",
+  ". No object detected after picking on lifting tray. Can't take case from conveyor. Case placed on robot, recovery.",
+  ". No object detected after picking on lifting tray. Lifting height error. Case placed on robot, recovery.",
+
+  ". No task for the box. System bug. Remove the box manually.",
+
+  ". Personal detection monitor failure. Security module failure. Recovery.",
+
+  ". Remote emergency stop triggered. System bug. Recovery.",
+
+  ". Robot placed box incorrectly on station. Box position corrected. Recovery.",
+
+  ". Safety vest detection speed monitor failure. Vest reaction. Recovery.",
+
+  ". Safety communication failure. System bug. Recovery.",
+  ". Safety self check failure. Security module failure. Recovery.",
+
+  ". Speed error. Drive component exception. Recovery."
+  ];
+
+  function copyAllTemplates(arg){
+    // arg can be: button OR click event
+    const btn = arg?.currentTarget ? arg.currentTarget : arg;
+
+    const text = ERROR_TEMPLATES.join("\n\n");
+
+    // reliable copy (execCommand fallback)
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(e){ ok = false; }
+    document.body.removeChild(ta);
+
+    if(ok){
+      if(typeof toast === "function") toast("Copied ✅");
+
+      // visual confirm (only if we have a real button element)
+      if(btn && btn.classList){
+        const oldText = btn.textContent;
+        btn.classList.add("copySuccess");
+        btn.textContent = "Copied ✓";
+
+        setTimeout(() => {
+          btn.classList.remove("copySuccess");
+          btn.textContent = oldText;
+        }, 1500);
+      }
+    } else {
+      if(typeof toast === "function") toast("Copy failed. Press Ctrl+C");
+    }
+  }
+
+  function fallbackCopy(text){
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      document.execCommand("copy");
+      if(typeof toast === "function") toast("All templates copied ✅");
+    } catch {
+      alert("Copy failed. Press Ctrl+C");
+    }
+
+    document.body.removeChild(textarea);
+  }
+
+  function initTemplatesUI(){
+    const panel = document.getElementById("templatePanel");
+    const btn = document.getElementById("templateBtn");
+    const close = document.getElementById("closeTemplates");
+    const list = document.getElementById("templateList");
+
+    // If any element missing, stop (prevents crashes)
+    if(!panel || !btn || !close || !list) {
+      console.warn("Templates UI missing elements:", { panel, btn, close, list });
+      return;
+    }
+
+    // Render templates
+    list.innerHTML = "";
+    ERROR_TEMPLATES.forEach(text => {
+      const div = document.createElement("div");
+      div.className = "templateItem";
+      div.textContent = text;
+
+      div.addEventListener("click", async () => {
+        try{
+          await navigator.clipboard.writeText(text);
+          if(typeof toast === "function") toast("Copied ✅");
+        }catch{
+          // Fallback if clipboard blocked
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          if(typeof toast === "function") toast("Copied ✅");
+        }
+      });
+
+      list.appendChild(div);
+    });
+
+    // Open/close
+    btn.addEventListener("click", () => panel.classList.add("open"));
+    close.addEventListener("click", () => panel.classList.remove("open"));
+
+    document.getElementById("copyAllTemplates")
+    ?.addEventListener("click", copyAllTemplates);
+
+    // Optional: click outside to close
+    document.addEventListener("keydown", (e) => {
+      if(e.key === "Escape") panel.classList.remove("open");
+    });
+  }
+
+  // IMPORTANT: run only after HTML exists
+  document.addEventListener("DOMContentLoaded", initTemplatesUI);
 })();
 </script>
 <noscript>
@@ -1313,5 +1588,23 @@ Rostyslav Mykhavko
     © LKNZMZD
   </a>
 </div>
+<!-- Templates Button -->
+<button id="templateBtn" class="templateBtn">Templates</button>
+
+<!-- Templates Panel -->
+<div id="templatePanel" class="templatePanel">
+  <div class="templateHeader">
+    <span>Error Templates</span>
+
+    <div style="display:flex; gap:6px;">
+      <button id="copyAllTemplates" data-action="copy-all-templates" type="button">Copy All</button>
+      <button id="closeTemplates">✕</button>
+    </div>
+
+  </div>
+
+  <div id="templateList" class="templateList"></div>
+</div>
+<div id="toast" class="toast"></div>
 </body>
 </html>
