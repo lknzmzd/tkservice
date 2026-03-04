@@ -616,6 +616,34 @@
     }
 
     // ---- collision of 2 robots ----
+    if (
+      L.includes("collision of 2 robots") &&
+      L.includes("kiva") &&
+      L.includes("take a case")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.TwoRobotsCollide;
+      subType = SUB.CannotLocate;
+      issueDesc = "Robots collided while Kiva tried to take a case";
+      recovery = "Change of position and recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("collision of 2 robots") &&
+      L.includes("kubot") &&
+      L.includes("take a case")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.TwoRobotsCollide;
+      subType = SUB.CannotLocate;
+      issueDesc = "Robots collided while Kubot tried to take a case";
+      recovery = "Change of position and recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if(L.includes("collision of 2 robots") || L.includes("robots collided") || L.includes("robot collision")){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.TwoRobotsCollide;
@@ -626,25 +654,6 @@
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
-    if (L.includes("collision of 2 robots") && L.includes("kiva") && L.includes("take a case")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.TwoRobotsCollide;
-      subType = SUB.LostBoxPos;
-      issueDesc = "Robots collided, while Kiva tired to take a case";
-      recovery = "Change of position and recovery";
-      minutes = 4;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    if (L.includes("collision of 2 robots") && L.includes("kubot") && L.includes("take a case")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.TwoRobotsCollide;
-      subType = SUB.LostBoxPos;
-      issueDesc = "Robots collided, while Kubot tired to take a case";
-      recovery = "Change of position and recovery";
-      minutes = 4;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
 
     if ((L.includes("failed to take the box") || L.includes("failed to take the case")) && L.includes("hit the workstation")) {
       issueType = ISSUE_TYPE.Equipment;
@@ -656,15 +665,18 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- no object after detection picking on lifting tray ----
-    if(L.includes("no object after detection")){
+    // ---- No object detected after picking on lifting tray ----
+    if (
+      L.includes("no object detected") &&
+      L.includes("lifting tray")
+    ){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.NoObjectDetected;
       subType = SUB.LiftingHeight;
-      issueDesc = "No object after detection picking on lifting tray (conveyor).";
-      recovery = "Case was put on a robot, recovery";
-      minutes = 2;
-      return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+      issueDesc = "No object detected after picking on lifting tray";
+      recovery = "Case placed on robot, recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
     if (L.includes("abnormal box delivery") || (L.includes("failed to place") && L.includes("dropped"))) {
@@ -962,13 +974,18 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    if (L.includes("put incorrectly box on station") || (L.includes("position box") && L.includes("corrected"))) {
+    // ---- Robot placed box incorrectly on station ----
+    if (
+      L.includes("robot placed box incorrectly") &&
+      L.includes("station")
+    ){
       issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.AbnormalPick;
-      subType = SUB.LostBoxPos;
-      issueDesc = "Some robot put incorrectly box on station.";
-      recovery = "Position box was corrected. Recovery";
+      quick = QUICK.BoxStuck;
+      subType = SUB.WrongPickPlace;
+      issueDesc = "Robot placed box incorrectly on station";
+      recovery = "Box position corrected";
       minutes = 3;
+
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -982,11 +999,31 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    if (L.includes("obstacle on the path") && L.includes("dopped box")) {
+    // ---- Unable to drive / obstacle on the path / dropped box ----
+    if (
+      L.includes("unable to drive") &&
+      L.includes("obstacle on the path") &&
+      L.includes("dropped box")
+    ){
       issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.DropBox;
+      quick = QUICK.UnableDrive;
       subType = SUB.ObstacleOnPath;
-      issueDesc = "Obstacle on the path dopped box";
+      issueDesc = "Obstacle on the path dropped box.";
+      recovery = "Moved out";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Unable to drive / obstacle on the path / dropped item ----
+    if (
+      L.includes("unable to drive") &&
+      L.includes("obstacle on the path") &&
+      L.includes("dropped item")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.UnableDrive;
+      subType = SUB.ObstacleOnPath;
+      issueDesc = "Obstacle on the path dropped item";
       recovery = "Moved out";
       minutes = 3;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
@@ -1007,16 +1044,6 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    if (L.includes("obstacle on the path") && L.includes("dopped item")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.DropBox;
-      subType = SUB.ObstacleOnPath;
-      issueDesc = "Obstacle on the path dopped item";
-      recovery = "Moved out";
-      minutes = 3;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
     if (L.includes("lost box") && L.includes("unknown reason")) {
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.DropBox;
@@ -1024,6 +1051,35 @@
       issueDesc = "Lost box, unknown reason";
       recovery = "Moved out";
       minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Failed to take a case - KUBOT ----
+    if (
+      L.includes("failed to take a case") &&
+      L.includes("wrong box position")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.WrongPickPlace;
+      issueDesc = "Failed to take a case, wrong box position.";
+      recovery = "Recovery";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    // ---- Failed to place a case - cross beam damaged ----
+    if (
+      L.includes("failed to place a case") &&
+      L.includes("cross beam")
+    ){
+      issueType = ISSUE_TYPE.Construction;
+      quick = QUICK.AbnormalPickUpAndDelivery;
+      subType = SUB.CrossBeam;
+      issueDesc = "Failed to place a case, cross beam damaged.";
+      recovery = "Recovery";
+      minutes = 4;
+
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -1037,12 +1093,17 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    if (L.includes("failed to place a case") && L.includes("unknown reason")) {
-      issueType = ISSUE_TYPE.Equipment;
+    // ---- Failed to deliver a case / irregular operation on tally station ----
+    if (
+      L.includes("failed to deliver a case") &&
+      L.includes("irregular operation") &&
+      L.includes("tally station")
+    ){
+      issueType = ISSUE_TYPE.Operation;
       quick = QUICK.AbnormalPick;
-      subType = SUB.CannotLocate;
-      issueDesc = "Failed to place a case, unknown reason";
-      recovery = "Recovery";
+      subType = SUB.IrregularOperation;
+      issueDesc = "Irregular operation on tally station.";
+      recovery = "Box moved out";
       minutes = 4;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
@@ -1482,6 +1543,7 @@ Rostyslav Mykhavko
   ". Failed to connect to server. Network disconnected. Recovery.",
   ". Failed to take a case. Wrong box position. Recovery.",
   ". Failed to take a case. Unknown reason. Recovery.",
+  ". Failed to place a case. Cross beam damaged. Recovery.",
   ". Failed to place a case. Unknown reason. Recovery.",
   ". Failed to take the box. Hit the workstation. Change of position and recovery.",
   ". Failed to deliver a case. Irregular operation on tally station. Box moved out.",
