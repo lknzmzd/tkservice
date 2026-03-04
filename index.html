@@ -325,6 +325,7 @@
     ProgramBug: "程序逻辑BUG Program logic bug",
     HardwareDamage: "硬件损坏 Hardware damage",
     CrossBeam: "跨梁凸起 Cross beam",
+    BackSupportMechanismAbnormal: "背撑机构异常 Abnormality of back support mechanism",
     ChassisCam: "底盘相机故障 Chassis camera malfunction"
   };
 
@@ -1109,6 +1110,21 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
+    // ---- Failed to take a case - abnormal back support mechanism ----
+    if (
+      L.includes("failed to take a case") &&
+      L.includes("back support")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.BackSupportMechanismAbnormal;
+      issueDesc = "Failed to take a case, abnormal back support mechanism.";
+      recovery = "Recovery";
+      minutes = 4;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (L.includes("moving abnormal")) {
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.UnableDrive;
@@ -1544,6 +1560,7 @@ Rostyslav Mykhavko
   ". Failed to connect to server. Network disconnected. Recovery.",
   ". Failed to take a case. Wrong box position. Recovery.",
   ". Failed to take a case. Unknown reason. Recovery.",
+  ". Failed to take a case. Abnormal back support mechanism. Recovery. ",
   ". Failed to place a case. Cross beam damaged. Recovery.",
   ". Failed to place a case. Unknown reason. Recovery.",
   ". Failed to take the box. Hit the workstation. Change of position and recovery.",
