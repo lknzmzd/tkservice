@@ -789,6 +789,20 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
+    // ---- No task for the box -> System / Data error / Program bug ----
+    if (
+      L.includes("no task for the box") ||
+      (L.includes("no task") && (L.includes("box") || L.includes("tote")))
+    ){
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.DataError;
+      subType = SUB.ProgramBug;
+      issueDesc = "No task for the box, system bug.";
+      recovery = "Remove the box manually.";
+      minutes = 2; // change if you want
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (L.includes("remote emergency stop")) {
       issueType = ISSUE_TYPE.System;
       quick = QUICK.RobotSafetyTriggered;
@@ -983,6 +997,11 @@
     const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
     const t = normalizeDeviceToken(deviceNoRaw);
 
+    const U = String(deviceNoRaw || "").toUpperCase().trim();
+
+    // ---- Conveyor Line ----
+    if (U.startsWith("BIGLOOP")) return "Conveyor Line";
+
     // Station / special tokens (based on LEFT side)
     if (t.prefix === "PPPO") return "Material box";
     if (t.prefix === "CS") return "Charging station";
@@ -1012,6 +1031,7 @@
 
     // keep full token for station/special
     if (t.prefix === "PPPO") return t.raw;
+    if (t.U.startsWith("BIGLOOP")) return t.raw;
     if (t.prefix === "CS") return t.raw;
     if (t.prefix === "H") return t.raw;
 
