@@ -144,6 +144,10 @@
       color:#fff !important;
     }
 
+    .inputWarning{
+      border:2px solid #ffd37a !important;
+    }
+    
   </style>
 </head>
 <body>
@@ -214,6 +218,16 @@
       </div>
 
       <textarea id="raw" placeholder="Paste raw log here..."></textarea>
+      <div id="issuesPanel" class="issuesPanel" style="display:none;">
+        <div class="issuesHeader">
+          <span><b id="issuesCount">0</b> issue(s) found</span>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="fixMissingDots" type="button">Fix missing dot</button>
+            <button id="clearIssues" type="button">Clear issues</button>
+          </div>
+        </div>
+        <div id="issuesList" class="issuesList"></div>
+      </div>
 
       <div class="btns">
         <button class="primary" id="gen" type="button">Generate TSV</button>
@@ -476,6 +490,67 @@
       recs.push({name, line});
     }
     return recs;
+  }
+
+  function validateRawInput(){
+    const raw = $("raw").value || "";
+    const lines = raw.split(/\r?\n/);
+
+    const warnings = [];
+    const errors = [];
+
+    const isNameLine = (line) => {
+      const t = line.trim();
+      // same as splitIntoRecords()
+      return t && !/[0-9]/.test(t) && !/\./.test(t) && t.length <= 60;
+    };
+
+    lines.forEach((line, i) => {
+      const t = line.trim();
+      if(!t) return;
+
+      // ✅ ignore name lines
+      if(isNameLine(t)) return;
+
+      const lineNum = i + 1;
+
+      // Must end with HH:MM somewhere
+      if(!/\b\d{1,2}:\d{2}\b/.test(t)){
+        warnings.push({ line: lineNum, msg: "Missing time (HH:MM)" });
+      }
+
+      // Must start with device token(s) BEFORE first dot (your core rule)
+      // ex: "209." or "H126,2211." or "CS123/."
+      if(!/^\s*[A-Za-z0-9\/,\s]+\s*\./.test(t)){
+        errors.push({ line: lineNum, msg: "Device number must be before first dot" });
+      }
+
+      // If line starts with number and space but not number-dot => missing dot
+      if(/^\s*\d+\s+/.test(t) && !/^\s*\d+\s*\./.test(t)){
+        warnings.push({ line: lineNum, msg: "Missing dot after device number" });
+      }
+    });
+
+    const warnBox = $("warnText");
+
+    // Optional: keep UI readable (don’t dump 50 messages in header)
+    const fmt = (arr, icon) =>
+      arr.slice(0, 3).map(x => `${icon} L${x.line}: ${x.msg}`).join(" | ") +
+      (arr.length > 3 ? ` | +${arr.length - 3} more…` : "");
+
+    if(errors.length){
+      warnBox.textContent = fmt(errors, "🔴");
+      setDot("rawDot","err");   // ✅ must be "err"
+      $("raw").classList.add("inputWarning");
+    } else if(warnings.length){
+      warnBox.textContent = fmt(warnings, "🟡");
+      setDot("rawDot","warn");
+      $("raw").classList.add("inputWarning");
+    } else {
+      warnBox.textContent = "🟢 Valid";
+      setDot("rawDot","ok");
+      $("raw").classList.remove("inputWarning");
+    }
   }
 
   // ---------------------------
@@ -1438,13 +1513,7 @@ Rostyslav Mykhavko
     $("rowCount").textContent = `Rows: ${out ? out.split("\n").filter(Boolean).length : 0}`;
 
     if(!raw.trim()){
-      setDot("rawDot",""); 
-      $("warnText").textContent = "";
-    } else if(v.warn > 0){
-      setDot("rawDot","warn");
-      $("warnText").textContent = `Warnings: ${v.warn}`;
-    } else {
-      setDot("rawDot","ok");
+      setDot("rawDot","");
       $("warnText").textContent = "";
     }
 
@@ -1460,7 +1529,7 @@ Rostyslav Mykhavko
     $("loadExample").addEventListener("click", loadExample);
 
     // UI updates only (NO auto-generate)
-    $("raw").addEventListener("input", updateUIStates);
+    $("raw").addEventListener("input", validateRawInput);
     $("raw").addEventListener("paste", () => setTimeout(updateUIStates, 0));
     $("out").addEventListener("input", updateUIStates);
 
