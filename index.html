@@ -10,7 +10,10 @@
     header { padding: 16px 18px; border-bottom: 1px solid #1f2230; background:#0d0f16; position: sticky; top:0; }
     h1 { font-size: 16px; margin: 0 0 6px 0; }
     p { margin: 0; opacity: .8; font-size: 13px; line-height: 1.35; }
-    main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
+
+    /* ✅ 3 columns (Raw / Output / Advanced) */
+    main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 12px; }
+
     .card { border: 1px solid #1f2230; border-radius: 12px; overflow:hidden; background:#0d0f16; }
     .card h2 { font-size: 13px; margin: 0; padding: 10px 12px; border-bottom: 1px solid #1f2230; opacity:.9; }
     .card .body { padding: 12px; }
@@ -26,7 +29,10 @@
     .small { font-size: 12px; opacity:.75; margin-top: 8px; line-height: 1.35; }
     .warn { color:#ffd37a; }
     code { background:#0b0c10; border:1px solid #262a3b; padding: 2px 6px; border-radius: 8px; }
-    @media (max-width: 980px){ main { grid-template-columns: 1fr; } }
+
+    /* ✅ single-column on smaller screens */
+    @media (max-width: 1100px){ main { grid-template-columns: 1fr; } }
+
     /* ---- Interactivity ---- */
     textarea:focus, input:focus { outline: 2px solid #2e3aa0; outline-offset: 2px; }
     .badge { display:inline-flex; gap:8px; align-items:center; font-size:12px; opacity:.85; }
@@ -147,7 +153,6 @@
     .inputWarning{
       border:2px solid #ffd37a !important;
     }
-    
   </style>
 </head>
 <body>
@@ -155,6 +160,7 @@
 <header>
   <h1>Issue Log Fixer → TSV (Feishu-friendly)</h1>
   <p>Paste raw logs → Generate TSV → paste into Feishu. Keeps Device Type → Quality(empty) → Device No.</p>
+
   <div class="smallRow" style="margin-bottom:8px; justify-content:flex-start;">
     <span class="badge">
       <span id="rawDot" class="dot"></span>
@@ -162,10 +168,12 @@
       <span id="rowCount" class="counter" style="margin-left:10px;">Rows: 0</span>
     </span>
   </div>
+
   <div class="smallRow" style="margin-bottom:8px;">
     <span class="badge"><span id="outDot" class="dot"></span>Output</span>
     <span id="warnText" class="counter"></span>
   </div>
+
   <details class="rulesPanel">
     <summary>Rules (click to expand)</summary>
     <div class="rulesBody">
@@ -173,17 +181,16 @@
         <li>Input format: <code>Device number. message. HH:MM</code></li>
         <li> • 209 → Robot  //  • H1xx/ → Work Station  //  • H2xx/ → Tally Station  //  • CSxxx/ → Charging Station  //  • PPPOxxx/ → Material box  // • BigLoop/ → Conveyor Line</li>
         <li>Device number must be before the first dot.</li>
-        <li> Always use the error template (standard wording).</li>
+        <li>Always use the error template (standard wording).</li>
         <li>Always end with time in format HH:MM.</li>
-        <li> Do NOT write device numbers inside the sentence.</li>
+        <li>Do NOT write device numbers inside the sentence.</li>
         <li>Shift stats auto-reset at <b>06:00</b> and <b>18:00</b>.</li>
       </ul>
     </div>
   </details>
-  
+
   <div class="smallRow" style="margin-bottom:8px;">
     <span class="badge"><span id="shiftDot" class="dot ok"></span>Shift rows</span>
-
     <span class="counter">
       <span id="shiftLabel">—</span>
       · Total: <b id="shiftTotal">0</b>
@@ -218,6 +225,7 @@
       </div>
 
       <textarea id="raw" placeholder="Paste raw log here..."></textarea>
+
       <div id="issuesPanel" class="issuesPanel" style="display:none;">
         <div class="issuesHeader">
           <span><b id="issuesCount">0</b> issue(s) found</span>
@@ -241,6 +249,7 @@
       </div>
     </div>
   </section>
+
   <section class="card">
     <h2>2) Output (TSV)</h2>
     <div class="body">
@@ -259,6 +268,24 @@
       </div>
 
       <div class="small">Abnormal time format: <code>00:06</code>. End time = Start + minutes.</div>
+    </div>
+  </section>
+
+  <!-- ✅ 3) Advanced information -->
+  <section class="card">
+    <h2>3) Advanced information</h2>
+    <div class="body">
+      <div class="row" style="margin-bottom:10px;">
+        <button id="refreshAdvanced" type="button" class="primary">Refresh</button>
+        <button id="copyAdvanced" type="button" class="good">Copy Advanced</button>
+        <button id="clearShiftStats" type="button">Clear shift stats</button>
+      </div>
+
+      <div class="small" style="opacity:.8; margin-bottom:10px;">
+        Based on <b>current shift</b> totals (06:00–18:00 / 18:00–06:00).
+      </div>
+
+      <div id="advBox"></div>
     </div>
   </section>
 </main>
@@ -333,10 +360,8 @@
     AbnormalLifting: "举升机构异常 Abnormal lifting mechanism",
     LostBoxPos: "取放箱位置错误 Wrong pick and place box position",
     CannotLocated: "无法定义异常 Problem Cannot located",
-    LiftingHeight: "举升高度误差Lifting height error",
     MaterialSuperHigh: "物料超高 Material super high",
     SecurityModule: "安全模块故障Security module failure",
-    ProgramBug: "程序逻辑BUG Program logic bug",
     HardwareDamage: "硬件损坏 Hardware damage",
     CrossBeam: "跨梁凸起 Cross beam",
     BackSupportMechanismAbnormal: "背撑机构异常 Abnormality of back support mechanism",
@@ -406,49 +431,6 @@
     2223,2224,2225,2226,2227,2228
   ]);
 
-  function extractDeviceNos(line){
-    let s = String(line || "").trim();
-    if (!s) return [];
-
-    // remove time at end so it doesn't get captured as device token
-    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");
-
-    const tokens = [];
-
-    // We accept:
-    // "H126,2211. ..."  (correct)
-    // "H126. 2211. ..." (people mistake dot instead of comma -> we still parse)
-    //
-    // Loop: keep consuming "<token(s)>." from the start
-    while (true){
-      const m = s.match(/^\s*([A-Za-z0-9\/]+(?:\s*,\s*[A-Za-z0-9\/]+)*)\s*\.\s*(.*)$/);
-      if (!m) break;
-
-      const head = m[1];
-      s = m[2];
-
-      head.split(",").forEach(t => {
-        t = t.trim();
-        if (t) tokens.push(t);
-      });
-
-      // If next part starts with "someToken." again, the loop continues (for H126. 2211.)
-      // If next part is sentence text, loop ends.
-      if (!/^\s*[A-Za-z0-9\/]+\s*\./.test(s)) break;
-    }
-
-    // If nothing was found by the strict "start-of-line" rule, return empty
-    return tokens;
-  }
-
-  function clearOtherShiftsKeepCurrent(){
-    const { store, shift } = getShiftBucket();
-    // Keep ONLY current shift (optional behavior, matches “clear every 12h”)
-    const kept = {};
-    kept[shift.key] = store[shift.key];
-    saveShiftStore(kept);
-  }
-
   // ---------------------------
   // Helpers
   // ---------------------------
@@ -479,6 +461,34 @@
     return m ? m[1].replace(/\s+/g,"") : "";
   }
 
+  function extractDeviceNos(line){
+    let s = String(line || "").trim();
+    if (!s) return [];
+
+    // remove time at end so it doesn't get captured as device token
+    s = s.replace(/\b\d{1,2}:\d{2}\b/g, " ");
+
+    const tokens = [];
+
+    // Loop: keep consuming "<token(s)>." from the start
+    while (true){
+      const m = s.match(/^\s*([A-Za-z0-9\/]+(?:\s*,\s*[A-Za-z0-9\/]+)*)\s*\.\s*(.*)$/);
+      if (!m) break;
+
+      const head = m[1];
+      s = m[2];
+
+      head.split(",").forEach(t => {
+        t = t.trim();
+        if (t) tokens.push(t);
+      });
+
+      if (!/^\s*[A-Za-z0-9\/]+\s*\./.test(s)) break;
+    }
+
+    return tokens;
+  }
+
   // Split input into records with names
   function splitIntoRecords(raw){
     const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -492,6 +502,27 @@
     return recs;
   }
 
+  function setDot(id, state){
+    const el = $(id);
+    if(!el) return;
+    el.className = "dot";
+    if(state==="ok") el.classList.add("ok");
+    if(state==="warn") el.classList.add("warn");
+    if(state==="err") el.classList.add("err");
+  }
+
+  function toast(msg){
+    const t = $("toast");
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>t.classList.remove("show"), 1200);
+  }
+
+  // ---------------------------
+  // Validation (header status)
+  // ---------------------------
   function validateRawInput(){
     const raw = $("raw").value || "";
     const lines = raw.split(/\r?\n/);
@@ -501,46 +532,37 @@
 
     const isNameLine = (line) => {
       const t = line.trim();
-      // same as splitIntoRecords()
       return t && !/[0-9]/.test(t) && !/\./.test(t) && t.length <= 60;
     };
 
     lines.forEach((line, i) => {
       const t = line.trim();
       if(!t) return;
-
-      // ✅ ignore name lines
       if(isNameLine(t)) return;
 
       const lineNum = i + 1;
 
-      // Must end with HH:MM somewhere
       if(!/\b\d{1,2}:\d{2}\b/.test(t)){
         warnings.push({ line: lineNum, msg: "Missing time (HH:MM)" });
       }
 
-      // Must start with device token(s) BEFORE first dot (your core rule)
-      // ex: "209." or "H126,2211." or "CS123/."
       if(!/^\s*[A-Za-z0-9\/,\s]+\s*\./.test(t)){
         errors.push({ line: lineNum, msg: "Device number must be before first dot" });
       }
 
-      // If line starts with number and space but not number-dot => missing dot
       if(/^\s*\d+\s+/.test(t) && !/^\s*\d+\s*\./.test(t)){
         warnings.push({ line: lineNum, msg: "Missing dot after device number" });
       }
     });
 
     const warnBox = $("warnText");
-
-    // Optional: keep UI readable (don’t dump 50 messages in header)
     const fmt = (arr, icon) =>
       arr.slice(0, 3).map(x => `${icon} L${x.line}: ${x.msg}`).join(" | ") +
       (arr.length > 3 ? ` | +${arr.length - 3} more…` : "");
 
     if(errors.length){
       warnBox.textContent = fmt(errors, "🔴");
-      setDot("rawDot","err");   // ✅ must be "err"
+      setDot("rawDot","err");
       $("raw").classList.add("inputWarning");
     } else if(warnings.length){
       warnBox.textContent = fmt(warnings, "🟡");
@@ -553,19 +575,49 @@
     }
   }
 
+  function validateRaw(raw){
+    const lines = raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    let warn = 0;
+
+    for(const line of lines){
+      const isName = !/[0-9]/.test(line) && !/\./.test(line) && line.length <= 60;
+      if(isName) continue;
+
+      if(!/\b\d{1,2}:\d{2}\b/.test(line)) warn++;
+      if(!/^\s*[A-Za-z0-9\/,\s]+\s*\./.test(line)) warn++;
+    }
+
+    return { warn, lines: lines.length };
+  }
+
+  function updateUIStates(){
+    const raw = $("raw").value || "";
+    const out = $("out").value || "";
+
+    validateRawInput();
+    $("rowCount").textContent = `Rows: ${out ? out.split("\n").filter(Boolean).length : 0}`;
+
+    if(!raw.trim()){
+      setDot("rawDot","");
+      $("warnText").textContent = "";
+      $("raw").classList.remove("inputWarning");
+    }
+
+    if(!out.trim()) setDot("outDot","");
+    else setDot("outDot","ok");
+  }
+
   // ---------------------------
-  // RULE ENGINE (STRICT OPTIONS ONLY)
+  // RULE ENGINE (your classify) — unchanged
   // ---------------------------
   function classify(line){
-    // user rule: no "Unable to rotate" option -> treat as Unable to drive
     let txt = normText(line)
       .replace(/unable to rotate/ig, "Unable to drive")
       .replace(/dirty dm code/ig, "Dirty DM code")
-      .replace(/lost dm code/ig, "Missing DM code"); // treat as missing dm for dropdown consistency
+      .replace(/lost dm code/ig, "Missing DM code");
 
     const L = low(txt);
 
-    // default for Unable to drive = Equipment (you asked)
     let issueType = ISSUE_TYPE.Equipment;
     let quick = QUICK.UnableDrive;
     let subType = SUB.CannotLocate;
@@ -573,9 +625,8 @@
     let recovery = "Recovery";
     let minutes = Number($("defaultMin").value) || 2;
 
-    // ---- DM cases ----
     if(L.includes("dirty dm code") || L.includes("ground code dirty")){
-      issueType = ISSUE_TYPE.Environment;               // YOU SPECIFIED this
+      issueType = ISSUE_TYPE.Environment;
       quick = QUICK.UnableDrive;
       subType = SUB.GroundDirty;
       issueDesc = "Unable to drive. Dirty DM code.";
@@ -585,29 +636,27 @@
     }
 
     if(L.includes("missing dm code")){
-      issueType = ISSUE_TYPE.Equipment;                 // YOU SPECIFIED this
+      issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.UnableDrive;
-      subType = SUB.ChassisCam;                         // you asked chassis cam for missing dm
+      subType = SUB.ChassisCam;
       issueDesc = "Unable to drive. Missing DM code.";
       recovery = "Recovery key and set to DM code";
       minutes = 3;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
-    // If phrase says "could not find dm code on the floor"
     if(L.includes("could not find dm code") || L.includes("cannot find dm code")){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.UnableDrive;
-      subType = SUB.ChassisCam; // floor code missing
+      subType = SUB.ChassisCam;
       issueDesc = "Could not find DM code on the floor.";
       recovery = "Recovery";
       minutes = 3;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
-    // ---- uneven / seam ----
     if(L.includes("uneven ground")){
-      issueType = ISSUE_TYPE.Environment;                 // you said mostly Equipment
+      issueType = ISSUE_TYPE.Environment;
       quick = QUICK.UnableDrive;
       subType = SUB.Uneven;
       issueDesc = "Unable to drive. Uneven ground.";
@@ -620,7 +669,7 @@
       issueType = ISSUE_TYPE.Environment;
       quick = QUICK.UnableDrive;
       subType = SUB.GroundSeam;
-      issueDesc = "Unable to drive. Ground seam effect.";
+      issueDesc = "Unable to drive, ground seam effect.";
       recovery = "Recovery";
       minutes = 2;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
@@ -636,18 +685,26 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- foreign object on floor ----
-    if(L.includes("foreign object on the floor") || L.includes("foreign objects on the floor") || L.includes("foreign object")){
-      issueType = ISSUE_TYPE.Customer;
-      quick = QUICK.UnableDrive;                        // forced due to your dropdown limitation
-      subType = SUB.ForeignObjects;                     // MUST be exact no-space version
-      issueDesc = "Unable to drive. Foreign object on the floor.";
-      recovery = "DM was cleaned, recovery key";
-      minutes = 2;
-      return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+    if (L.includes("foreign object") && L.includes("unable to drive")){
+        issueType = ISSUE_TYPE.Customer;
+        quick = QUICK.UnableDrive;
+        subType = SUB.ForeignObjects;
+        issueDesc = "Unable to drive, foreign object on the floor.";
+        recovery = "DM was cleaned, recovery key";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- Obstacle detection + system bug -> System / Obstacle avoidance / Program bug ----
+    if (L.includes("foreign object") && L.includes("unable to rotate")){
+        issueType = ISSUE_TYPE.Customer;
+        quick = QUICK.UnableDrive;
+        subType = SUB.ForeignObjects;
+        issueDesc = "Unable to rotate, foreign object on the floor.";
+        recovery = "DM was cleaned, recovery key";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (
       (L.includes("obstacle detection") || L.includes("obstacle detected")) &&
       (L.includes("system bug") || L.includes("bug"))
@@ -657,21 +714,30 @@
       subType = SUB.ProgramBug;
       issueDesc = "Obstacle detection, system bug";
       recovery = "Recovery";
-      minutes = 2; // change if needed
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    if (L.includes("lost his track in tally station")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.UnableDrive;
-      subType = SUB.CannotLocated;
-      issueDesc = "Lost his track in tally station";
-      recovery = "Recovery";
       minutes = 2;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- lost track / no sound ----
+    if (L.includes("lost track") && L.includes("tally station")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.UnableDrive;
+        subType = SUB.CannotLocated;
+        issueDesc = "Unable to drive, lost track in tally station.";
+        recovery = "Recovery";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("chasing")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.UnableDrive;
+        subType = SUB.CannotLocated;
+        issueDesc = "Abnormal chasing.";
+        recovery = "Recovery";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if(L.includes("lost his track") || L.includes("no sound")){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.UnableDrive;
@@ -692,7 +758,26 @@
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
-    // ---- collision of 2 robots ----
+    if (L.includes("unable to drive") && L.includes("unknown")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.UnableDrive;
+        subType = SUB.CannotLocated;
+        issueDesc = "Unable to drive, unknown reason.";
+        recovery = "Recovery";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("unable to rotate") && L.includes("unknown")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.UnableDrive;
+        subType = SUB.CannotLocated;
+        issueDesc = "Unable to rotate, unknown reason.";
+        recovery = "Recovery";
+        minutes = 2;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if (
       L.includes("collision of 2 robots") &&
       L.includes("kiva") &&
@@ -700,7 +785,7 @@
     ){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.TwoRobotsCollide;
-      subType = SUB.CannotLocate;
+      subType = SUB.WrongPickPlace;
       issueDesc = "Robots collided while Kiva tried to take a case";
       recovery = "Change of position and recovery";
       minutes = 4;
@@ -714,7 +799,7 @@
     ){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.TwoRobotsCollide;
-      subType = SUB.CannotLocate;
+      subType = SUB.WrongPickPlace;
       issueDesc = "Robots collided while Kubot tried to take a case";
       recovery = "Change of position and recovery";
       minutes = 4;
@@ -725,12 +810,44 @@
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.TwoRobotsCollide;
       subType = SUB.CannotLocate;
-      issueDesc = "Collision of 2 robots. Robots collided.";
+      issueDesc = "Collision of 2 robots.";
       recovery = "Change of position and recovery";
       minutes = 2;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
     }
 
+    // ---- No object detected after picking on lifting tray ----
+    if (L.includes("no object") && L.includes("lifting tray")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.NoObjectDetected;
+        subType = SUB.LiftingHeight;
+
+        if (L.includes("station")){
+            issueDesc = "No object, can't take case from station.";
+        } 
+        else if (L.includes("conveyor")){
+            issueDesc = "No object, can't take case from conveyor.";
+        } 
+        else {
+            issueDesc = "No object, lifting height error.";
+        }
+
+        recovery = "Case placed on robot, recovery";
+        minutes = 2;
+
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    //------------Failed to take/place a case----------------
+    if (L.includes("abnormal box delivery") || (L.includes("failed to place") && L.includes("dropped"))) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.LostBoxPos;
+      issueDesc = "Abnormal box delivery. Failed to place a case, dropped case.";
+      recovery = "Recovery";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
 
     if ((L.includes("failed to take the box") || L.includes("failed to take the case")) && L.includes("hit the workstation")) {
       issueType = ISSUE_TYPE.Equipment;
@@ -739,30 +856,6 @@
       issueDesc = "Failed to take the box, hit the workstation";
       recovery = "Change of position and recovery";
       minutes = 4;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    // ---- No object detected after picking on lifting tray ----
-    if (
-      L.includes("no object detected") &&
-      L.includes("lifting tray")
-    ){
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.NoObjectDetected;
-      subType = SUB.LiftingHeight;
-      issueDesc = "No object detected after picking on lifting tray";
-      recovery = "Case placed on robot, recovery";
-      minutes = 4;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    if (L.includes("abnormal box delivery") || (L.includes("failed to place") && L.includes("dropped"))) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.AbnormalPick;
-      subType = SUB.LostBoxPos;
-      issueDesc = "Abnormal box delivery. Failed to place a case, dropped case.";
-      recovery = "Recovery";
-      minutes = 3;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -781,6 +874,63 @@
       quick = QUICK.AbnormalPick;
       subType = SUB.MaterialSuperHigh;
       issueDesc = "Failed to place a case, material box too high";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("kiva failed to place a case") && L.includes("tote misaligned")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.BoxStuck;
+      subType = SUB.LostBoxPos;
+      issueDesc = "Kiva failed to place a case, tote misaligned during transfer, left hanging diagonally in rack";
+      recovery = "Recovery";
+      minutes = 5;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("failed to take a case") &&
+      L.includes("wrong box position")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.WrongPickPlace;
+      issueDesc = "Failed to take a case, wrong box position.";
+      recovery = "Recovery";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("failed to place a case") &&
+      L.includes("cross beam")
+    ){
+      issueType = ISSUE_TYPE.Construction;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.CrossBeam;
+      issueDesc = "Failed to place a case, cross beam damaged.";
+      recovery = "Recovery";
+      minutes = 4;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("failed to take a case") && L.includes("unknown reason")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.CannotLocate;
+      issueDesc = "Failed to take a case, unknown reason";
+      recovery = "Recovery";
+      minutes = 4;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("failed to place a case") && L.includes("unknown reason")) {
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnormalPick;
+      subType = SUB.CannotLocate;
+      issueDesc = "Failed to place a case, unknown reason";
       recovery = "Recovery";
       minutes = 4;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
@@ -822,17 +972,6 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- Remote emergency stop triggered (System) ----
-    if (L.includes("remote emergency stop")) {
-      issueType = ISSUE_TYPE.System;
-      quick = QUICK.RobotSafetyTriggered;
-      subType = SUB.ProgramBug;
-      issueDesc = "Remote emergency stop triggered";
-      recovery = "Recovery";
-      minutes = 3;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
     // ---- Front bumper triggered in tally station + system bug (Two robots collide) ----
     if (
       (L.includes("front bumper triggered") || (L.includes("bumper") && L.includes("triggered"))) &&
@@ -868,17 +1007,6 @@
       quick = QUICK.RobotSafetyTriggered;
       subType = SUB.AbnormalLifting;   // <-- we must add this key below
       issueDesc = "All protection triggers has been released. Abnormal lifting mechanisms.";
-      recovery = "Recovery";
-      minutes = 2;
-      return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
-    }
-
-    // ---- emergency stop ----
-    if(L.includes("emergency stop")){
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.RobotSafetyTriggered;
-      subType = SUB.EmergencyStopDamaged;
-      issueDesc = "Emergency stop triggered. Emergency stop button damaged.";
       recovery = "Recovery";
       minutes = 2;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
@@ -945,16 +1073,6 @@
       issueDesc = "Wrong box position";
       recovery = "Recovery";
       minutes = 3;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    if (L.includes("kiva failed to place a case") && L.includes("tote misaligned")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.BoxStuck;
-      subType = SUB.LostBoxPos;
-      issueDesc = "Kiva failed to place a case, tote misaligned during transfer, left hanging diagonally in rack";
-      recovery = "Recovery";
-      minutes = 5;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -1041,11 +1159,42 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
+    // ---- Emergency ----
     if (L.includes("remote emergency stop")) {
       issueType = ISSUE_TYPE.System;
       quick = QUICK.RobotSafetyTriggered;
       subType = SUB.ProgramBug;
       issueDesc = "Remote emergency stop is triggered";
+      recovery = "Recovery";
+      minutes = 3;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("emergency stop") && L.includes("front")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.RobotSafetyTriggered;
+        subType = SUB.EmergencyStopDamaged;
+        issueDesc = "Emergency stop trigger released, front emergency stop button damaged.";
+        recovery = "Recovery";
+        minutes = 5;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("emergency stop") && L.includes("rear")){
+        issueType = ISSUE_TYPE.Equipment;
+        quick = QUICK.RobotSafetyTriggered;
+        subType = SUB.EmergencyStopDamaged;
+        issueDesc = "Emergency stop trigger released, rear emergency stop button damaged.";
+        recovery = "Recovery";
+        minutes = 5;
+        return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (L.includes("remote emergency stop")) {
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.RobotSafetyTriggered;
+      subType = SUB.ProgramBug;
+      issueDesc = "Remote emergency stop triggered";
       recovery = "Recovery";
       minutes = 3;
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
@@ -1131,45 +1280,6 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // ---- Failed to take a case - KUBOT ----
-    if (
-      L.includes("failed to take a case") &&
-      L.includes("wrong box position")
-    ){
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.AbnormalPick;
-      subType = SUB.WrongPickPlace;
-      issueDesc = "Failed to take a case, wrong box position.";
-      recovery = "Recovery";
-      minutes = 3;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    // ---- Failed to place a case - cross beam damaged ----
-    if (
-      L.includes("failed to place a case") &&
-      L.includes("cross beam")
-    ){
-      issueType = ISSUE_TYPE.Construction;
-      quick = QUICK.AbnormalPick;
-      subType = SUB.CrossBeam;
-      issueDesc = "Failed to place a case, cross beam damaged.";
-      recovery = "Recovery";
-      minutes = 4;
-
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
-    if (L.includes("failed to take a case") && L.includes("unknown reason")) {
-      issueType = ISSUE_TYPE.Equipment;
-      quick = QUICK.AbnormalPick;
-      subType = SUB.CannotLocate;
-      issueDesc = "Failed to take a case, unknown reason";
-      recovery = "Recovery";
-      minutes = 4;
-      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
-    }
-
     // ---- Failed to deliver a case / irregular operation on tally station ----
     if (
       L.includes("failed to deliver a case") &&
@@ -1210,19 +1320,77 @@
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
-    // fallback (still strict options)
+    // fallback
     return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
   }
 
   // ---------------------------
-  // Build rows (TSV)
-  // Columns order must match your sheet:
-  // date | Device Type | Quality(empty) | Device No | Issue Type | Quick Classification | Problem location | Issue Description | Temporary measures | Status | Discoverer | start time | end time | abnormal time
+  // Device parsing helpers (unchanged)
+  // ---------------------------
+  function normalizeDeviceToken(token){
+    const raw0 = String(token || "").trim();
+    if (!raw0) return { raw: "", left: "", num: NaN, prefix: "", hasSlash: false, U: "" };
+
+    const raw = raw0.replace(/^[^\w\/]+|[^\w\/]+$/g, "");
+    const U = raw.toUpperCase();
+
+    const hasSlash = U.includes("/");
+    const left = hasSlash ? U.split("/")[0].trim() : U;
+
+    let prefix = "NUM";
+    if (left.startsWith("PPPO")) prefix = "PPPO";
+    else if (left.startsWith("CS")) prefix = "CS";
+    else if (left.startsWith("H")) prefix = "H";
+
+    const m = left.match(/\d+/);
+    const num = m ? Number(m[0]) : NaN;
+
+    return { raw, U, left, num, prefix, hasSlash };
+  }
+
+  function inferDeviceTypeFromNo(deviceNoRaw, fallback){
+    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
+    const t = normalizeDeviceToken(deviceNoRaw);
+
+    const U = String(deviceNoRaw || "").toUpperCase().trim();
+
+    if (U.startsWith("BIGLOOP")) return "Conveyor Line";
+    if (t.prefix === "PPPO") return "Material box";
+    if (t.prefix === "CS") return "Charging station";
+
+    if (t.prefix === "H") {
+      if (/^H1\d+/.test(t.left)) return "Work Station";
+      if (/^H2\d+/.test(t.left)) return "Tally station";
+      return "Work Station";
+    }
+
+    if (!Number.isFinite(t.num)) return fb;
+    if (K50H_SET.has(t.num)) return "K50H";
+    if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
+
+    return fb;
+  }
+
+  function normalizeDeviceNoForColumn(token){
+    const t = normalizeDeviceToken(token);
+    if (!t.raw) return "";
+
+    if (t.hasSlash) return t.U.replace(/\s+/g, "");
+    if (t.prefix === "PPPO") return t.raw;
+    if (t.U.startsWith("BIGLOOP")) return t.raw;
+    if (t.prefix === "CS") return t.raw;
+    if (t.prefix === "H") return t.raw;
+
+    return Number.isFinite(t.num) ? t.num : "";
+  }
+
+  // ---------------------------
+  // Build rows
   // ---------------------------
   function buildRows(rec){
     const date = $("date").value.trim();
     const fallbackDeviceType = $("deviceType").value.trim() || "K50H";
-    const quality = ""; // MUST be empty column
+    const quality = "";
 
     const startTime = extractTime(rec.line);
     const startMin = parseTimeToMinutes(startTime);
@@ -1234,7 +1402,6 @@
 
     const deviceNosRaw = extractDeviceNos(rec.line);
 
-    // if no device numbers found, still output ONE row (optional)
     if (!deviceNosRaw.length){
       const deviceType = fallbackDeviceType;
       const endTime = startMin==null ? "" : minutesToHHMM(startMin + c.minutes);
@@ -1274,88 +1441,11 @@
     });
   }
 
-  function normalizeDeviceToken(token){
-    const raw0 = String(token || "").trim();
-    if (!raw0) return { raw: "", left: "", num: NaN, prefix: "", hasSlash: false, U: "" };
-
-    const raw = raw0.replace(/^[^\w\/]+|[^\w\/]+$/g, "");
-    const U = raw.toUpperCase();
-
-    const hasSlash = U.includes("/");
-    const left = hasSlash ? U.split("/")[0].trim() : U;
-
-    let prefix = "NUM";
-    if (left.startsWith("PPPO")) prefix = "PPPO";
-    else if (left.startsWith("CS")) prefix = "CS";
-    else if (left.startsWith("H")) prefix = "H";
-
-    const m = left.match(/\d+/);
-    const num = m ? Number(m[0]) : NaN;
-
-    return { raw, U, left, num, prefix, hasSlash };
-  }
-
-  function inferDeviceTypeFromNo(deviceNoRaw, fallback){
-    const fb = (fallback && fallback.trim()) ? fallback.trim() : "K50H";
-    const t = normalizeDeviceToken(deviceNoRaw);
-
-    const U = String(deviceNoRaw || "").toUpperCase().trim();
-
-    // ---- Conveyor Line ----
-    if (U.startsWith("BIGLOOP")) return "Conveyor Line";
-
-    // Station / special tokens (based on LEFT side)
-    if (t.prefix === "PPPO") return "Material box";
-    if (t.prefix === "CS") return "Charging station";
-
-    // H1.. => Work Station, H2.. => Tally station
-    if (t.prefix === "H") {
-      if (/^H1\d+/.test(t.left)) return "Work Station";
-      if (/^H2\d+/.test(t.left)) return "Tally station";
-      return "Work Station"; // fallback for other Hxxx if you want
-    }
-
-    // Robots: use numeric mapping sets
-    if (!Number.isFinite(t.num)) return fb;
-    if (K50H_SET.has(t.num)) return "K50H";
-    if (A42T_E2_SET.has(t.num)) return "A42T-E2 hook";
-
-    return fb;
-  }
-
-  // If you still need the "deviceNo" value for column 4:
-  function normalizeDeviceNoForColumn(token){
-    const t = normalizeDeviceToken(token);
-    if (!t.raw) return "";
-
-    // if token contains "/" we KEEP FULL token always
-    if (t.hasSlash) return t.U.replace(/\s+/g, "");
-
-    // keep full token for station/special
-    if (t.prefix === "PPPO") return t.raw;
-    if (t.U.startsWith("BIGLOOP")) return t.raw;
-    if (t.prefix === "CS") return t.raw;
-    if (t.prefix === "H") return t.raw;
-
-    // plain robot -> number
-    return Number.isFinite(t.num) ? t.num : "";
-  }
-
-  function inferStationFromH(Htoken){
-    const U = String(Htoken || "").toUpperCase().trim();
-
-    // H2.. => Tally station
-    if (/^H2/.test(U)) return "Tally station";
-
-    // H1.. => Work Station
-    if (/^H1/.test(U)) return "Work Station";
-
-    // other Hxxx default
-    return "Work Station";
-  }
-
+  // ---------------------------
+  // Shift totals (your existing)
+  // ---------------------------
   const SHIFT_COUNT_KEY = "issue_log_shift_counts_v1";
-  function pad2(n){ return String(n).padStart(2,"0"); } // keep only one pad2 in your file
+
   function ymd(d){
     return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   }
@@ -1416,7 +1506,124 @@
     if(totalEl) totalEl.textContent = String(info.total);
   }
 
-  let lastRawSnapshot = "";
+  // ---------------------------
+  // ✅ Shift stats (Advanced information)
+  // ---------------------------
+  const SHIFT_STATS_KEY = "issue_log_shift_stats_v1";
+
+  function loadShiftStats(){
+    try { return JSON.parse(localStorage.getItem(SHIFT_STATS_KEY) || "{}"); }
+    catch { return {}; }
+  }
+  function saveShiftStats(obj){
+    localStorage.setItem(SHIFT_STATS_KEY, JSON.stringify(obj));
+  }
+
+  function incMap(map, key, by=1){
+    if(key == null) return;
+    const k = String(key).trim();
+    if(!k) return;
+    map[k] = (map[k] || 0) + by;
+  }
+
+  function ensureShiftStatsBucket(){
+    const shift = getCurrentShiftInfo();
+    const store = loadShiftStats();
+    if(!store[shift.key]){
+      store[shift.key] = {
+        label: shift.label,
+        totalRows: 0,
+        byIssueDesc: {},
+        byDeviceNo: {},
+        byQuick: {},
+        byIssueType: {},
+        bySubType: {},
+        updatedAt: Date.now()
+      };
+    }
+    return { shift, store, bucket: store[shift.key] };
+  }
+
+  function updateShiftStatsFromTSV(tsvRows){
+    const { store, bucket, shift } = ensureShiftStatsBucket();
+
+    for(const row of (tsvRows || [])){
+      const cols = String(row).split("\t");
+      const deviceNo = (cols[3] || "").trim() || "(blank)";
+      const issueType = (cols[4] || "").trim() || "(blank)";
+      const quick = (cols[5] || "").trim() || "(blank)";
+      const subType = (cols[6] || "").trim() || "(blank)";
+      const issueDesc = (cols[7] || "").trim() || "(blank)";
+
+      bucket.totalRows += 1;
+      incMap(bucket.byIssueDesc, issueDesc, 1);
+      incMap(bucket.byDeviceNo, deviceNo, 1);
+      incMap(bucket.byQuick, quick, 1);
+      incMap(bucket.byIssueType, issueType, 1);
+      incMap(bucket.bySubType, subType, 1);
+    }
+
+    bucket.updatedAt = Date.now();
+    store[shift.key] = bucket;
+    saveShiftStats(store);
+  }
+
+  function topN(obj, n=5){
+    return Object.entries(obj || {})
+      .sort((a,b)=>b[1]-a[1])
+      .slice(0,n);
+  }
+
+  function esc(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
+  function renderList(title, entries){
+    const items = entries.length
+      ? entries.map(([k,v]) => `<li><code>${esc(k)}</code> → <b>${v}</b></li>`).join("")
+      : "<li>—</li>";
+
+    return `
+      <div style="margin-top:10px;"><b>${esc(title)}</b></div>
+      <ul style="margin:6px 0 0 18px; padding:0; line-height:1.5;">${items}</ul>
+    `;
+  }
+
+  function renderAdvanced(){
+    const box = $("advBox");
+    if(!box) return;
+
+    const shift = getCurrentShiftInfo();
+    const statsStore = loadShiftStats();
+    const b = statsStore[shift.key];
+
+    if(!b){
+      box.innerHTML = `<div class="small" style="opacity:.8;">No shift stats yet. Click <b>Generate TSV</b> at least once.</div>`;
+      return;
+    }
+
+    const updated = new Date(b.updatedAt).toLocaleString();
+
+    box.innerHTML = `
+      <div class="small" style="opacity:.85; margin-bottom:8px;">
+        <div><b>Shift:</b> ${esc(b.label)}</div>
+        <div><b>Total rows this shift:</b> ${b.totalRows}</div>
+        <div><b>Last update:</b> ${esc(updated)}</div>
+      </div>
+      ${renderList("Top 5 Issue Description", topN(b.byIssueDesc, 5))}
+      ${renderList("Top 5 Device No", topN(b.byDeviceNo, 5))}
+      ${renderList("Top 5 Quick Classification", topN(b.byQuick, 5))}
+      ${renderList("Top 5 Issue Type", topN(b.byIssueType, 5))}
+      ${renderList("Top 5 Problem location (Sub Type)", topN(b.bySubType, 5))}
+    `;
+  }
+
+  // ---------------------------
+  // Generate / Copy / Download
+  // ---------------------------
   function generate(){
     const rawText = ($("raw").value || "").trim();
 
@@ -1428,28 +1635,81 @@
 
     const cleaned = newLines.map(x => String(x).trim()).filter(Boolean);
 
-    // Output shows ONLY current generation
     $("out").value = cleaned.join("\n");
 
-    // ✅ Always add to shift total when user clicks Generate
+    // Shift total rows (your existing counter)
     addRowsToShift(cleaned.length);
     updateShiftLabel();
+
+    // ✅ Shift stats (Advanced information)
+    updateShiftStatsFromTSV(cleaned);
+    renderAdvanced();
+
     updateUIStates();
   }
 
   async function copyTSV(){
     const text = $("out").value;
-    if(!text){ alert("Output is empty. Click Generate first."); return; }
+    if(!text){ toast("Output is empty"); return; }
     try{
       await navigator.clipboard.writeText(text);
-      alert("Copied ✅");
+      toast("Copied ✅");
     }catch(e){
       $("out").focus();
       $("out").select();
-      alert("Clipboard blocked. Text selected — press Ctrl+C.");
+      toast("Ctrl+C (clipboard blocked)");
     }
   }
 
+  async function copyAdvanced(){
+    const shift = getCurrentShiftInfo();
+    const statsStore = loadShiftStats();
+    const b = statsStore[shift.key];
+
+    if(!b){
+        toast("No shift stats yet");
+        return;
+    }
+
+    const fmtTop = (title, obj) => {
+        const items = topN(obj, 5);
+        const lines = items.length ? items.map(([k,v]) => `- ${k} → ${v}`) : ["- —"];
+        return `${title}\n${lines.join("\n")}`;
+    };
+
+    const updated = new Date(b.updatedAt).toLocaleString();
+
+    const text =
+    `Advanced information
+    Shift: ${b.label}
+    Total rows this shift: ${b.totalRows}
+    Last update: ${updated}
+
+    ${fmtTop("Top 5 Issue Description", b.byIssueDesc)}
+    ${fmtTop("Top 5 Device No", b.byDeviceNo)}
+    ${fmtTop("Top 5 Quick Classification", b.byQuick)}
+    ${fmtTop("Top 5 Issue Type", b.byIssueType)}
+    ${fmtTop("Top 5 Problem location (Sub Type)", b.bySubType)}
+    `;
+
+    try{
+        await navigator.clipboard.writeText(text);
+        toast("Advanced copied ✅");
+    }catch(e){
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        toast("Advanced copied ✅");
+    }
+    }
+  
   function downloadTSV(){
     const text = $("out").value || "";
     const blob = new Blob([text], {type:"text/tab-separated-values;charset=utf-8"});
@@ -1467,207 +1727,92 @@ Mykyta Kyrylov
 988. Unable to rotate. Dirty DM code. DM was cleaned, recovery key. 6:53
 Rostyslav Mykhavko
 209,2145. Collision of 2 robots. Robots collided, while Kiva tried to take a case. Change of position and recovery. 06:53`;
+    updateUIStates();
   }
 
-  function toast(msg){
-    const t = $("toast");
-    if(!t) return; // prevents crash if missing
-    t.textContent = msg;
-    t.classList.add("show");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(()=>t.classList.remove("show"), 1200);
-  }
-
-  function setDot(id, state){
-    const el = $(id);
-    el.className = "dot";
-    if(state==="ok") el.classList.add("ok");
-    if(state==="warn") el.classList.add("warn");
-    if(state==="err") el.classList.add("err");
-  }
-
-  function validateRaw(raw){
-    const lines = raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-    let warn = 0;
-
-    for(const line of lines){
-      // skip name lines (your existing logic)
-      const isName = !/[0-9]/.test(line) && !/\./.test(line) && line.length <= 60;
-      if(isName) continue;
-
-      // needs HH:MM somewhere
-      if(!/\b\d{1,2}:\d{2}\b/.test(line)) warn++;
-
-      // must have device token before first dot
-      if(!/^\s*[A-Za-z0-9\/,\s]+\s*\./.test(line)) warn++;
-    }
-
-    return { warn, lines: lines.length };
-  }
-
-  function updateUIStates(){
-    const raw = $("raw").value || "";
-    const out = $("out").value || "";
-
-    const v = validateRaw(raw);
-    $("rowCount").textContent = `Rows: ${out ? out.split("\n").filter(Boolean).length : 0}`;
-
-    if(!raw.trim()){
-      setDot("rawDot","");
-      $("warnText").textContent = "";
-    }
-
-    if(!out.trim()) setDot("outDot","");
-    else setDot("outDot","ok");
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    $("gen").addEventListener("click", generate);
-    $("copy").addEventListener("click", copyTSV);
-    $("download").addEventListener("click", downloadTSV);
-    $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; });
-    $("loadExample").addEventListener("click", loadExample);
-
-    // UI updates only (NO auto-generate)
-    $("raw").addEventListener("input", validateRawInput);
-    $("raw").addEventListener("paste", () => setTimeout(updateUIStates, 0));
-    $("out").addEventListener("input", updateUIStates);
-
-    $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; updateUIStates(); });
-    $("loadExample").addEventListener("click", () => { loadExample(); updateUIStates(); });
-
-    $("resetRows")?.addEventListener("click", () => {
-      resetShiftRows();
-      updateShiftLabel();
-      toast("Shift rows reset ✅");
-    });
-
-    updateShiftLabel();
-
-    // ✅ Auto-set today's date (YYYY/MM/DD)
-    (function setTodayDate(){
-      const el = $("date");
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      const v = `${yyyy}/${mm}/${dd}`;
-
-      // Ctrl+Enter => generate
-      $("raw").addEventListener("keydown", (e) => {
-        if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
-          generate(); updateUIStates();
-          toast("Generated ✅");
-        }
-      });
-
-      // Replace alerts in copyTSV with toast (optional quick patch)
-      const oldCopy = copyTSV;
-      copyTSV = async function(){
-        const text = $("out").value;
-        if(!text){ toast("Output is empty"); return; }
-        try{
-          await navigator.clipboard.writeText(text);
-          toast("Copied ✅");
-        }catch(e){
-          $("out").focus(); $("out").select();
-          toast("Ctrl+C (clipboard blocked)");
-        }
-      }
-
-      // only override if empty or still old hardcoded value
-      if (!el.value.trim() || el.value.trim() === "2026/02/26") {
-        el.value = v;
-      }
-    })();
-    console.log("Issue Log Fixer loaded ✅");
-    updateShiftLabel();
-  });
-
-  // ---------- ERROR TEMPLATES ----------
+  // ---------------------------
+  // Templates (your existing)
+  // ---------------------------
   const ERROR_TEMPLATES = [
-  ". Unable to drive. Missing DM code. Recovery key and set to DM code.",
-  ". Unable to drive. Foreign object on the floor. DM was cleaned, recovery key.",
-  ". Unable to drive. Uneven ground. Recovery.",
-  ". Unable to drive. Ground seam effect. Recovery.",
-  ". Unable to drive. Abnormal chasing. Recovery.",
-  ". Unable to drive. Wrong way after picking, collision with rack. Recovery.",
-  ". Unable to drive. Lost track, no sound. Recovery.",
-  ". Unable to drive. System error, unknown. Recovery.",
-  ". Unable to drive. Lost track in tally station. Recovery.",
-  ". Unable to drive. Moving abnormal. Recovery.",
-  ". Unable to drive. Obstacle on the path dropped box. Moved out.",
-  ". Unable to drive. Obstacle on the path dropped item. Moved out.",
-  ". Unable to drive. Unknown reason. Recovery.",
+    ". Unable to drive. Missing DM code. Recovery key and set to DM code.",
+    ". Unable to drive. Foreign object on the floor. DM was cleaned, recovery key.",
+    ". Unable to drive. Uneven ground. Recovery.",
+    ". Unable to drive. Ground seam effect. Recovery.",
+    ". Unable to drive. Abnormal chasing. Recovery.",
+    ". Unable to drive. Wrong way after picking, collision with rack. Recovery.",
+    ". Unable to drive. Lost track, no sound. Recovery.",
+    ". Unable to drive. System error, unknown. Recovery.",
+    ". Unable to drive. Lost track in tally station. Recovery.",
+    ". Unable to drive. Moving abnormal. Recovery.",
+    ". Unable to drive. Obstacle on the path dropped box. Moved out.",
+    ". Unable to drive. Obstacle on the path dropped item. Moved out.",
+    ". Unable to drive. Unknown reason. Recovery.",
 
-  ". Unable to rotate. Dirty DM code. DM was cleaned, recovery key.",
-  ". Unable to rotate. Foreign object on the floor. DM was cleaned, recovery key.",
-  ". Unable to rotate. Missing DM code. Recovery key and set to DM code.",
-  ". Unable to rotate. Lifting mechanism failure. Recovery.",
-  ". Unable to rotate. Unknown reason. Recovery.",
+    ". Unable to rotate. Dirty DM code. DM was cleaned, recovery key.",
+    ". Unable to rotate. Foreign object on the floor. DM was cleaned, recovery key.",
+    ". Unable to rotate. Missing DM code. Recovery key and set to DM code.",
+    ". Unable to rotate. Lifting mechanism failure. Recovery.",
+    ". Unable to rotate. Unknown reason. Recovery.",
 
-  ". All protection triggers released. Abnormal lifting mechanism. Recovery.",
-  ". Abnormal box delivery. Failed to place a case, dropped case. Recovery.",
+    ". All protection triggers released. Abnormal lifting mechanism. Recovery.",
+    ". Abnormal box delivery. Failed to place a case, dropped case. Recovery.",
 
-  ". Battery communication failure. Unknown reason. Recovery.",
-  ". Box stuck. Scanner problem, putaway convertline. Remove the box.",
-  ". Box stuck.  Unknown, putaway convertline. Remove the box.",
+    ". Battery communication failure. Unknown reason. Recovery.",
+    ". Box stuck. Scanner problem, putaway convertline. Remove the box.",
+    ". Box stuck.  Unknown, putaway convertline. Remove the box.",
 
-  ". Could not find DM code on the floor. Chassis drive failure. Recovery.",
-  ". Collision of 2 robots. Robots collided, problem cannot be located. Change of position and recovery.",
-  ". Collision of 2 robots. Robots collided while Kiva tried to take a case. Change of position and recovery.",
-  ". Collision of 2 robots. Robots collided while Kubot tried to take a case. Change of position and recovery.",
-  ". Charging failure. Parameter configuration error. Changed mode to Auto.",
-  ". Charging failure. Parameter configuration error. Changed mode to Dynamic.",
+    ". Could not find DM code on the floor. Chassis drive failure. Recovery.",
+    ". Collision of 2 robots. Robots collided, problem cannot be located. Change of position and recovery.",
+    ". Collision of 2 robots. Robots collided while Kiva tried to take a case. Change of position and recovery.",
+    ". Collision of 2 robots. Robots collided while Kubot tried to take a case. Change of position and recovery.",
+    ". Charging failure. Parameter configuration error. Changed mode to Auto.",
+    ". Charging failure. Parameter configuration error. Changed mode to Dynamic.",
 
-  ". Dropped box. Abnormal operation, system bug. Second box moved out.",
+    ". Dropped box. Abnormal operation, system bug. Second box moved out.",
 
-  ". External retrieval abnormal. Unknown reason. Recovery.",
-  ". Emergency stop button triggered. Front emergency stop button damaged. Recovery.",
-  ". Emergency stop button triggered. Rear emergency stop button damaged. Recovery.",
+    ". External retrieval abnormal. Unknown reason. Recovery.",
+    ". Emergency stop button triggered. Front emergency stop button damaged. Recovery.",
+    ". Emergency stop button triggered. Rear emergency stop button damaged. Recovery.",
 
-  ". Failed to connect to server. Network disconnected. Recovery.",
-  ". Failed to take a case. Wrong box position. Recovery.",
-  ". Failed to take a case. Unknown reason. Recovery.",
-  ". Failed to take a case. Abnormal back support mechanism. Recovery. ",
-  ". Failed to place a case. Cross beam damaged. Recovery.",
-  ". Failed to place a case. Unknown reason. Recovery.",
-  ". Failed to take the box. Hit the workstation. Change of position and recovery.",
-  ". Failed to deliver a case. Irregular operation on tally station. Box moved out.",
-  ". Failed to place a case. Material box too high. Recovery.",
-  ". Front bumper triggered in tally station. Robot collision, system bug. Recovery.",
+    ". Failed to connect to server. Network disconnected. Recovery.",
+    ". Failed to take a case. Wrong box position. Recovery.",
+    ". Failed to take a case. Unknown reason. Recovery.",
+    ". Failed to take a case. Abnormal back support mechanism. Recovery. ",
+    ". Failed to place a case. Cross beam damaged. Recovery.",
+    ". Failed to place a case. Unknown reason. Recovery.",
+    ". Failed to take the box. Hit the workstation. Change of position and recovery.",
+    ". Failed to deliver a case. Irregular operation on tally station. Box moved out.",
+    ". Failed to place a case. Material box too high. Recovery.",
+    ". Front bumper triggered in tally station. Robot collision, system bug. Recovery.",
 
-  ". Kiva failed to place a case. Tote misaligned during transfer, hanging diagonally in rack. Recovery.",
+    ". Kiva failed to place a case. Tote misaligned during transfer, hanging diagonally in rack. Recovery.",
 
-  ". Lost box. Unknown reason. Moved out.",
+    ". Lost box. Unknown reason. Moved out.",
 
-  ". No object detected after picking on lifting tray. Can't take case from station. Case placed on robot, recovery.",
-  ". No object detected after picking on lifting tray. Can't take case from conveyor. Case placed on robot, recovery.",
-  ". No object detected after picking on lifting tray. Lifting height error. Case placed on robot, recovery.",
-  ". No task for the box. System bug. Remove the box manually.",
+    ". No object detected after picking on lifting tray. Can't take case from station. Case placed on robot, recovery.",
+    ". No object detected after picking on lifting tray. Can't take case from conveyor. Case placed on robot, recovery.",
+    ". No object detected after picking on lifting tray. Lifting height error. Case placed on robot, recovery.",
+    ". No task for the box. System bug. Remove the box manually.",
 
-  ". Obstacle detection. System bug. Recovery.",
+    ". Obstacle detection. System bug. Recovery.",
 
-  ". Personal detection monitor failure. Security module failure. Recovery.",
+    ". Personal detection monitor failure. Security module failure. Recovery.",
 
-  ". Remote emergency stop triggered. System bug. Recovery.",
-  ". Robot placed box incorrectly on station. Box position corrected. Recovery.",
+    ". Remote emergency stop triggered. System bug. Recovery.",
+    ". Robot placed box incorrectly on station. Box position corrected. Recovery.",
 
-  ". Safety vest detection speed monitor failure. Vest reaction. Recovery.",
-  ". Safety communication failure. System bug. Recovery.",
-  ". Safety self check failure. Security module failure. Recovery.",
-  ". Standing without sound. Unknown. Remote recovery.",
-  ". Speed detection module failure. Safety sensors triggered. Recovery.",
-  ". Speed error. Drive component exception. Recovery."
+    ". Safety vest detection speed monitor failure. Vest reaction. Recovery.",
+    ". Safety communication failure. System bug. Recovery.",
+    ". Safety self check failure. Security module failure. Recovery.",
+    ". Standing without sound. Unknown. Remote recovery.",
+    ". Speed detection module failure. Safety sensors triggered. Recovery.",
+    ". Speed error. Drive component exception. Recovery."
   ];
 
   function copyAllTemplates(arg){
-    // arg can be: button OR click event
     const btn = arg?.currentTarget ? arg.currentTarget : arg;
-
     const text = ERROR_TEMPLATES.join("\n\n");
 
-    // reliable copy (execCommand fallback)
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -1681,42 +1826,19 @@ Rostyslav Mykhavko
     document.body.removeChild(ta);
 
     if(ok){
-      if(typeof toast === "function") toast("Copied ✅");
-
-      // visual confirm (only if we have a real button element)
+      toast("Copied ✅");
       if(btn && btn.classList){
         const oldText = btn.textContent;
         btn.classList.add("copySuccess");
         btn.textContent = "Copied ✓";
-
         setTimeout(() => {
           btn.classList.remove("copySuccess");
           btn.textContent = oldText;
         }, 1500);
       }
     } else {
-      if(typeof toast === "function") toast("Copy failed. Press Ctrl+C");
+      toast("Copy failed. Press Ctrl+C");
     }
-  }
-
-  function fallbackCopy(text){
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-
-    try {
-      document.execCommand("copy");
-      if(typeof toast === "function") toast("All templates copied ✅");
-    } catch {
-      alert("Copy failed. Press Ctrl+C");
-    }
-
-    document.body.removeChild(textarea);
   }
 
   function initTemplatesUI(){
@@ -1725,13 +1847,11 @@ Rostyslav Mykhavko
     const close = document.getElementById("closeTemplates");
     const list = document.getElementById("templateList");
 
-    // If any element missing, stop (prevents crashes)
     if(!panel || !btn || !close || !list) {
       console.warn("Templates UI missing elements:", { panel, btn, close, list });
       return;
     }
 
-    // Render templates
     list.innerHTML = "";
     ERROR_TEMPLATES.forEach(text => {
       const div = document.createElement("div");
@@ -1741,42 +1861,99 @@ Rostyslav Mykhavko
       div.addEventListener("click", async () => {
         try{
           await navigator.clipboard.writeText(text);
-          if(typeof toast === "function") toast("Copied ✅");
+          toast("Copied ✅");
         }catch{
-          // Fallback if clipboard blocked
           const ta = document.createElement("textarea");
           ta.value = text;
           document.body.appendChild(ta);
           ta.select();
           document.execCommand("copy");
           document.body.removeChild(ta);
-          if(typeof toast === "function") toast("Copied ✅");
+          toast("Copied ✅");
         }
       });
 
       list.appendChild(div);
     });
 
-    // Open/close
     btn.addEventListener("click", () => panel.classList.add("open"));
     close.addEventListener("click", () => panel.classList.remove("open"));
 
     document.getElementById("copyAllTemplates")
-    ?.addEventListener("click", copyAllTemplates);
+      ?.addEventListener("click", copyAllTemplates);
 
-    // Optional: click outside to close
     document.addEventListener("keydown", (e) => {
       if(e.key === "Escape") panel.classList.remove("open");
     });
   }
 
-  // IMPORTANT: run only after HTML exists
-  document.addEventListener("DOMContentLoaded", initTemplatesUI);
+  // ---------------------------
+  // Boot
+  // ---------------------------
+  document.addEventListener("DOMContentLoaded", () => {
+    $("gen").addEventListener("click", generate);
+    $("copy").addEventListener("click", copyTSV);
+    $("download").addEventListener("click", downloadTSV);
+
+    $("clear").addEventListener("click", () => { $("raw").value=""; $("out").value=""; updateUIStates(); renderAdvanced(); });
+    $("loadExample").addEventListener("click", loadExample);
+
+    $("raw").addEventListener("input", updateUIStates);
+    $("out").addEventListener("input", updateUIStates);
+
+    $("resetRows")?.addEventListener("click", () => {
+      resetShiftRows();
+      updateShiftLabel();
+      toast("Shift rows reset ✅");
+    });
+
+    
+
+    $("refreshAdvanced")?.addEventListener("click", renderAdvanced);
+    $("copyAdvanced")?.addEventListener("click", copyAdvanced);
+    $("clearShiftStats")?.addEventListener("click", () => {
+      const shift = getCurrentShiftInfo();
+      const store = loadShiftStats();
+      delete store[shift.key];
+      saveShiftStats(store);
+      toast("Shift stats cleared ✅");
+      renderAdvanced();
+    });
+
+    // Auto set today's date
+    (function setTodayDate(){
+      const el = $("date");
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const v = `${yyyy}/${mm}/${dd}`;
+      if (!el.value.trim()) el.value = v;
+    })();
+
+    // Ctrl+Enter => generate
+    $("raw").addEventListener("keydown", (e) => {
+      if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+        generate();
+        toast("Generated ✅");
+      }
+    });
+
+    updateShiftLabel();
+    updateUIStates();
+    initTemplatesUI();
+    renderAdvanced();
+
+    console.log("Issue Log Fixer loaded ✅");
+  });
+
 })();
 </script>
+
 <noscript>
   <div style="padding:12px;color:#ffd37a;">JavaScript is disabled — buttons cannot work.</div>
 </noscript>
+
 <div style="
   position:fixed;
   bottom:8px;
@@ -1799,6 +1976,7 @@ Rostyslav Mykhavko
     © LKNZMZD
   </a>
 </div>
+
 <!-- Templates Button -->
 <button id="templateBtn" class="templateBtn">Templates</button>
 
@@ -1811,11 +1989,12 @@ Rostyslav Mykhavko
       <button id="copyAllTemplates" data-action="copy-all-templates" type="button">Copy All</button>
       <button id="closeTemplates">✕</button>
     </div>
-
   </div>
 
   <div id="templateList" class="templateList"></div>
 </div>
+
 <div id="toast" class="toast"></div>
+
 </body>
 </html>
