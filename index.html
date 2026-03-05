@@ -1544,6 +1544,13 @@
     return { shift, store, bucket: store[shift.key] };
   }
 
+  async function saveStats(data){
+    await fetch("https://error-stats-api.skmrts6ddz.workers.dev",{
+      method:"POST",
+      body: JSON.stringify(data)
+    });
+  }
+
   function updateShiftStatsFromTSV(tsvRows){
     const { store, bucket, shift } = ensureShiftStatsBucket();
 
@@ -1948,6 +1955,22 @@ Rostyslav Mykhavko
   });
 
 })();
+async function loadStats(){
+  const res = await fetch("https://error-stats-api.skmrts6ddz.workers.dev");
+  const json = await res.json();
+  return json.value ? JSON.parse(json.value) : {};
+}
+
+async function initStats(){
+  const savedStats = await loadStats();
+
+  if(savedStats){
+    advancedStats = savedStats;
+    renderAdvancedPanel();
+  }
+}
+
+initStats();
 </script>
 
 <noscript>
