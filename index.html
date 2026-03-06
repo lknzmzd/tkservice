@@ -1384,6 +1384,36 @@
     return Number.isFinite(t.num) ? t.num : "";
   }
 
+  function extractRobotNosForStats(token){
+    const raw = String(token || "").trim().toUpperCase();
+    if(!raw) return [];
+
+    const found = [];
+
+    const addIfRobot = (part) => {
+      const p = String(part || "").trim();
+      if(!/^\d+$/.test(p)) return;
+
+      const n = Number(p);
+      if (K50H_SET.has(n) || A42T_E2_SET.has(n)) {
+        found.push(String(n));
+      }
+    };
+
+    // If token has slash, check BOTH sides
+    if(raw.includes("/")){
+      const parts = raw.split("/");
+      for(const part of parts){
+        addIfRobot(part);
+      }
+      return [...new Set(found)];
+    }
+
+    // Plain token
+    addIfRobot(raw);
+    return [...new Set(found)];
+  }
+
   // ---------------------------
   // Build rows
   // ---------------------------
@@ -1537,7 +1567,8 @@
         byDeviceNo: {},
         byQuick: {},
         byIssueType: {},
-        bySubType: {},
+        //bySubType: {},
+        byDeviceType: {},   // ← NEW: device type distribution
         updatedAt: Date.now()
       };
     }
@@ -1551,23 +1582,55 @@
     });
   }
 
+  function extractRobotNoForStats(token){
+    const raw = String(token || "").trim().toUpperCase();
+    if(!raw) return null;
+
+    // H123/2145  -> count 2145
+    // CS12/209   -> count 209
+    if(raw.includes("/")){
+      const parts = raw.split("/");
+      const right = (parts[1] || "").trim();
+
+      if(/^\d+$/.test(right)){
+        const n = Number(right);
+        if (K50H_SET.has(n) || A42T_E2_SET.has(n)) return String(n);
+      }
+      return null;
+    }
+
+    // plain robot number
+    if(/^\d+$/.test(raw)){
+      const n = Number(raw);
+      if (K50H_SET.has(n) || A42T_E2_SET.has(n)) return String(n);
+    }
+
+    return null;
+  }
+
   function updateShiftStatsFromTSV(tsvRows){
     const { store, bucket, shift } = ensureShiftStatsBucket();
 
     for(const row of (tsvRows || [])){
       const cols = String(row).split("\t");
-      const deviceNo = (cols[3] || "").trim() || "(blank)";
+
+      const deviceType = (cols[1] || "").trim() || "(blank)";
+      const deviceNoRaw = (cols[3] || "").trim();
       const issueType = (cols[4] || "").trim() || "(blank)";
       const quick = (cols[5] || "").trim() || "(blank)";
-      const subType = (cols[6] || "").trim() || "(blank)";
       const issueDesc = (cols[7] || "").trim() || "(blank)";
 
       bucket.totalRows += 1;
       incMap(bucket.byIssueDesc, issueDesc, 1);
-      incMap(bucket.byDeviceNo, deviceNo, 1);
       incMap(bucket.byQuick, quick, 1);
       incMap(bucket.byIssueType, issueType, 1);
-      incMap(bucket.bySubType, subType, 1);
+      incMap(bucket.byDeviceType, deviceType, 1);
+
+      // count only robot numbers
+      const robotNos = extractRobotNosForStats(deviceNoRaw);
+      for(const robotNo of robotNos){
+        incMap(bucket.byDeviceNo, robotNo, 1);
+      }
     }
 
     bucket.updatedAt = Date.now();
@@ -1612,19 +1675,19 @@
       return;
     }
 
-    const updated = new Date(b.updatedAt).toLocaleString();
+    const updated = new Date(b.updatedAt || Date.now()).toLocaleString();
 
     box.innerHTML = `
       <div class="small" style="opacity:.85; margin-bottom:8px;">
-        <div><b>Shift:</b> ${esc(b.label)}</div>
-        <div><b>Total rows this shift:</b> ${b.totalRows}</div>
+        <div><b>Shift:</b> ${esc(b.label || shift.label)}</div>
+        <div><b>Total rows this shift:</b> ${b.totalRows || 0}</div>
         <div><b>Last update:</b> ${esc(updated)}</div>
       </div>
-      ${renderList("Top 5 Issue Description", topN(b.byIssueDesc, 5))}
-      ${renderList("Top 5 Device No", topN(b.byDeviceNo, 5))}
-      ${renderList("Top 5 Quick Classification", topN(b.byQuick, 5))}
-      ${renderList("Top 5 Issue Type", topN(b.byIssueType, 5))}
-      ${renderList("Top 5 Problem location (Sub Type)", topN(b.bySubType, 5))}
+      ${renderList("Top 5 Issue Description", topN(b.byIssueDesc || {}, 5))}
+      ${renderList("Top 5 Device No", topN(b.byDeviceNo || {}, 5))}
+      ${renderList("Top 5 Quick Classification", topN(b.byQuick || {}, 5))}
+      ${renderList("Top 5 Issue Type", topN(b.byIssueType || {}, 5))}
+      ${renderList("Top 5 Device Type", topN(b.byDeviceType || {}, 5))}
     `;
   }
 
@@ -1694,9 +1757,9 @@
 
     ${fmtTop("Top 5 Issue Description", b.byIssueDesc)}
     ${fmtTop("Top 5 Device No", b.byDeviceNo)}
+    ${fmtTop("Top 5 Device Type", b.byDeviceType)}
     ${fmtTop("Top 5 Quick Classification", b.byQuick)}
     ${fmtTop("Top 5 Issue Type", b.byIssueType)}
-    ${fmtTop("Top 5 Problem location (Sub Type)", b.bySubType)}
     `;
 
     try{
@@ -1955,22 +2018,6 @@ Rostyslav Mykhavko
   });
 
 })();
-async function loadStats(){
-  const res = await fetch("https://error-stats-api.skmrts6ddz.workers.dev");
-  const json = await res.json();
-  return json.value ? JSON.parse(json.value) : {};
-}
-
-async function initStats(){
-  const savedStats = await loadStats();
-
-  if(savedStats){
-    advancedStats = savedStats;
-    renderAdvancedPanel();
-  }
-}
-
-initStats();
 </script>
 
 <noscript>
