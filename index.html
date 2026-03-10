@@ -342,6 +342,7 @@
   const SUB = {
     GroundDirty: "地面码脏污 Ground code dirty",
     MissingDM: "地面码缺失 Ground code missing",
+    GroundPosDev: "地脚定位偏差 Ground positioning deviation",
     Uneven: "地面不平 Uneven ground",
     GroundSeam: "地缝影响 Ground seam effect",
     ForeignObjects: "地面异物Foreign objects on the ground", // IMPORTANT no space
@@ -862,7 +863,7 @@
     if (L.includes("failed to delivered a case") && L.includes("irregular operation") && L.includes("tally")) {
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.AbnormalPick;
-      subType = SUB.IrregularOperation; // make sure SUB.IrregularOperation exists in your SUB list
+      subType = SUB.IrregularOperation; 
       issueDesc = "Failed to delivered a case, irregular operation on tally station.";
       recovery = "Box moved out";
       minutes = 4;
@@ -886,6 +887,20 @@
       issueDesc = "Kiva failed to place a case, tote misaligned during transfer, left hanging diagonally in rack";
       recovery = "Recovery";
       minutes = 5;
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("failed to take the box") &&
+      L.includes("robot already with box")
+    ){
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.ForkNoContainer;
+      subType = SUB.ProgramBug;
+      issueDesc = "Failed to take the box, robot already with box.";
+      recovery = "Put box back";
+      minutes = 3;
+
       return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
@@ -1024,14 +1039,58 @@
     }
 
     // ---- charging failure ----
+    if (
+      L.includes("charging failure") &&
+      L.includes("dm code position deviation")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.AbnCharging;
+      subType = SUB.GroundPosDev;
+      issueDesc = "Charging failure, dm code position deviation.";
+      recovery = "Move closer";
+      minutes = 2;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
     if(L.includes("charging failure")){
       issueType = ISSUE_TYPE.Equipment;
       quick = QUICK.AbnCharging;
       subType = SUB.ParameterConfigErr;
       issueDesc = "Charging failure. Parameter configuration error.";
-      recovery = L.includes("dynamic") ? "Changed mode to Dynamic" : "Changed mode to Auto";
+      recovery = L.includes("dynamic")
+          ? "Changed mode to Dynamic"
+          : "Changed mode to Auto";
       minutes = 2;
-      return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("kubot") &&
+      L.includes("totally uncharged")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.PowerModuleAbn;
+      subType = SUB.CannotLocate;
+      issueDesc = "Kubot totally uncharged.";
+      recovery = "Changed battery";
+      minutes = 4;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
+    }
+
+    if (
+      L.includes("robot totally uncharged")
+    ){
+      issueType = ISSUE_TYPE.Equipment;
+      quick = QUICK.PowerModuleAbn;
+      subType = SUB.CannotLocate;
+      issueDesc = "Robot totally uncharged.";
+      recovery = "Moved to charging station";
+      minutes = 4;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
     // ---- speed error / drive component exception ----
@@ -1043,6 +1102,19 @@
       recovery = "Recovery";
       minutes = 2;
       return {issueType, quick, subType, issueDesc, recovery, minutes, txt};
+    }
+
+    if (
+      L.includes("zone speed limitation failure")
+    ){
+      issueType = ISSUE_TYPE.System;
+      quick = QUICK.SpeedError;
+      subType = SUB.ProgramBug;
+      issueDesc = "Zone speed limitation failure.";
+      recovery = "Recovery";
+      minutes = 2;
+
+      return { issueType, quick, subType, issueDesc, recovery, minutes, txt };
     }
 
     // ---- customer fault example: box already on position ----
@@ -1837,6 +1909,7 @@ Rostyslav Mykhavko
     ". Collision of 2 robots. Robots collided while Kubot tried to take a case. Change of position and recovery.",
     ". Charging failure. Parameter configuration error. Changed mode to Auto.",
     ". Charging failure. Parameter configuration error. Changed mode to Dynamic.",
+    ". Charging failure. DM code position deviation. Move closer.",
 
     ". Dropped box. Abnormal operation, system bug. Second box moved out.",
 
@@ -1846,6 +1919,7 @@ Rostyslav Mykhavko
 
     ". Failed to connect to server. Network disconnected. Recovery.",
     ". Failed to take a case. Wrong box position. Recovery.",
+    ". Failed to take the box. Robot already with box, system bug. Put box back.",
     ". Failed to take a case. Unknown reason. Recovery.",
     ". Failed to take a case. Abnormal back support mechanism. Recovery. ",
     ". Failed to place a case. Cross beam damaged. Recovery.",
@@ -1856,6 +1930,7 @@ Rostyslav Mykhavko
     ". Front bumper triggered in tally station. Robot collision, system bug. Recovery.",
 
     ". Kiva failed to place a case. Tote misaligned during transfer, hanging diagonally in rack. Recovery.",
+    ". Kubot totally uncharged. Changed battery.",
 
     ". Lost box. Unknown reason. Moved out.",
 
@@ -1870,13 +1945,16 @@ Rostyslav Mykhavko
 
     ". Remote emergency stop triggered. System bug. Recovery.",
     ". Robot placed box incorrectly on station. Box position corrected. Recovery.",
+    ". Robot totally uncharged. Moved to charging station.",
 
     ". Safety vest detection speed monitor failure. Vest reaction. Recovery.",
     ". Safety communication failure. System bug. Recovery.",
     ". Safety self check failure. Security module failure. Recovery.",
     ". Standing without sound. Unknown. Remote recovery.",
     ". Speed detection module failure. Safety sensors triggered. Recovery.",
-    ". Speed error. Drive component exception. Recovery."
+    ". Speed error. Drive component exception. Recovery.",
+
+    ". Zone speed limitation failure. Unknown. Key."
   ];
 
   function copyAllTemplates(arg){
